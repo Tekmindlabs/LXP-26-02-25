@@ -103,6 +103,7 @@ model Campus {
   programs  Program[]             @relation("ProgramCampuses")
   coordinators     CoordinatorProfile[]
   teachers  TeacherCampus[]
+  students    StudentCampus[]
   // Audit fields
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1936,4 +1937,26 @@ model TeacherCampus {
 
   @@unique([teacherId, campusId])
   @@map("teacher_campus")
+}
+
+model StudentCampus {
+  id          String   @id @default(cuid())
+  studentId   String
+  campusId    String
+  isPrimary   Boolean  @default(false)
+  status      Status   @default(ACTIVE)
+  joinedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  student     Student  @relation(fields: [studentId], references: [id])
+  campus      Campus   @relation(fields: [campusId], references: [id])
+
+  @@unique([studentId, campusId])
+  @@index([studentId])
+  @@index([campusId])
+}
+
+model Student {
+  // ... existing code ...
+  campuses    StudentCampus[]
 }

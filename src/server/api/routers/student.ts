@@ -3,6 +3,8 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { Status, UserType, AttendanceStatus } from "@prisma/client";
 import { generatePassword } from "../../../utils/password";
 import * as XLSX from 'xlsx';
+import { CampusStudentService } from "../../services/CampusStudentService";
+import { CampusUserService } from "../../services/CampusUserService";
 
 interface StudentActivity {
 	status: string;
@@ -263,9 +265,6 @@ export const studentRouter = createTRPCRouter({
 			}
 		}),
 
-
-
-
 	deleteStudent: protectedProcedure
 		.input(z.string())
 		.mutation(async ({ ctx, input }) => {
@@ -296,8 +295,6 @@ export const studentRouter = createTRPCRouter({
 									user: true,
 								},
 							},
-
-
 						},
 					},
 				},
@@ -394,7 +391,6 @@ export const studentRouter = createTRPCRouter({
 			});
 		}),
 
-
 	assignToClass: protectedProcedure
 		.input(z.object({
 			studentId: z.string(),
@@ -453,7 +449,6 @@ export const studentRouter = createTRPCRouter({
 
 			return student;
 		}),
-
 
 	getStudentPerformance: protectedProcedure
 		.input(z.string())
@@ -668,5 +663,129 @@ export const studentRouter = createTRPCRouter({
 			}
 
 			return results;
+		}),
+
+	assignToCampus: protectedProcedure
+		.input(
+			z.object({
+				studentId: z.string(),
+				campusId: z.string(),
+				isPrimary: z.boolean().optional(),
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const campusStudentService = new CampusStudentService(
+				ctx.prisma,
+				new CampusUserService(ctx.prisma)
+			);
+
+			return campusStudentService.assignStudentToCampus(
+				ctx.session.user.id,
+				input.campusId,
+				input.studentId,
+				input.isPrimary
+			);
+		}),
+
+	removeFromCampus: protectedProcedure
+		.input(
+			z.object({
+				studentId: z.string(),
+				campusId: z.string(),
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const campusStudentService = new CampusStudentService(
+				ctx.prisma,
+				new CampusUserService(ctx.prisma)
+			);
+
+			return campusStudentService.removeStudentFromCampus(
+				ctx.session.user.id,
+				input.campusId,
+				input.studentId
+			);
+		}),
+
+	getCampusStudents: protectedProcedure
+		.input(
+			z.object({
+				campusId: z.string(),
+				includeInactive: z.boolean().optional(),
+			})
+		)
+		.query(async ({ ctx, input }) => {
+			const campusStudentService = new CampusStudentService(
+				ctx.prisma,
+				new CampusUserService(ctx.prisma)
+			);
+
+			return campusStudentService.getStudentsForCampus(
+				ctx.session.user.id,
+				input.campusId,
+				input.includeInactive
+			);
+		}),
+
+	getStudentCampuses: protectedProcedure
+		.input(
+			z.object({
+				studentId: z.string(),
+				includeInactive: z.boolean().optional(),
+			})
+		)
+		.query(async ({ ctx, input }) => {
+			const campusStudentService = new CampusStudentService(
+				ctx.prisma,
+				new CampusUserService(ctx.prisma)
+			);
+
+			return campusStudentService.getCampusesForStudent(
+				ctx.session.user.id,
+				input.studentId,
+				input.includeInactive
+			);
+		}),
+
+	updateCampusStatus: protectedProcedure
+		.input(
+			z.object({
+				studentId: z.string(),
+				campusId: z.string(),
+				status: z.nativeEnum(Status),
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const campusStudentService = new CampusStudentService(
+				ctx.prisma,
+				new CampusUserService(ctx.prisma)
+			);
+
+			return campusStudentService.updateStudentCampusStatus(
+				ctx.session.user.id,
+				input.campusId,
+				input.studentId,
+				input.status
+			);
+		}),
+
+	setPrimaryCampus: protectedProcedure
+		.input(
+			z.object({
+				studentId: z.string(),
+				campusId: z.string(),
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const campusStudentService = new CampusStudentService(
+				ctx.prisma,
+				new CampusUserService(ctx.prisma)
+			);
+
+			return campusStudentService.setPrimaryCampus(
+				ctx.session.user.id,
+				input.studentId,
+				input.campusId
+			);
 		}),
 });

@@ -67,13 +67,12 @@ export type AllPermissions = PermissionString | CoordinatorPermissionString;
 export type Permission = PermissionString;
 
 export enum DefaultRoles {
-  ADMIN = "admin",
   SUPER_ADMIN = "super-admin",
-  CAMPUS_ADMIN = "campus-admin",
-  TEACHER = "teacher",
-  STUDENT = "student",
-  PARENT = "parent",
-  COORDINATOR = "coordinator"
+  ADMIN = "ADMIN",
+  COORDINATOR = "COORDINATOR",
+  TEACHER = "TEACHER",
+  STUDENT = "STUDENT",
+  PARENT = "PARENT"
 }
 
 export const COORDINATOR_PERMISSIONS = {
@@ -87,8 +86,7 @@ export const COORDINATOR_PERMISSIONS = {
 
 export const RoleHierarchy: Record<DefaultRoles, DefaultRoles[]> = {
   [DefaultRoles.SUPER_ADMIN]: [],
-  [DefaultRoles.ADMIN]: [DefaultRoles.CAMPUS_ADMIN],
-  [DefaultRoles.CAMPUS_ADMIN]: [DefaultRoles.COORDINATOR],
+  [DefaultRoles.ADMIN]: [DefaultRoles.COORDINATOR],
   [DefaultRoles.COORDINATOR]: [DefaultRoles.TEACHER],
   [DefaultRoles.TEACHER]: [],
   [DefaultRoles.STUDENT]: [],
@@ -168,25 +166,6 @@ export const RolePermissions: Record<DefaultRoles, Permission[]> = {
     Permissions.GRADE_MODIFY,
     Permissions.CAMPUS_VIEW,
   ],
-  [DefaultRoles.CAMPUS_ADMIN]: [
-    Permissions.USER_READ,
-    Permissions.USER_UPDATE,
-    Permissions.ROLE_READ,
-    Permissions.CAMPUS_VIEW,
-    Permissions.CAMPUS_MANAGE,
-    Permissions.CLASS_GROUP_VIEW,
-    Permissions.CLASS_GROUP_MANAGE,
-    Permissions.CLASS_VIEW,
-    Permissions.CLASS_MANAGE,
-    Permissions.CLASS_ASSIGN_TEACHERS,
-    Permissions.CLASS_ASSIGN_STUDENTS,
-    Permissions.GRADEBOOK_VIEW,
-    Permissions.GRADEBOOK_OVERVIEW,
-    Permissions.GRADEBOOK_MANAGE,
-    Permissions.SUBJECT_VIEW,
-    Permissions.SUBJECT_MANAGE,
-    Permissions.SUBJECT_ASSIGN_TEACHERS,
-  ],
   [DefaultRoles.COORDINATOR]: [
     Permissions.USER_READ,
     Permissions.CLASS_GROUP_VIEW,
@@ -242,7 +221,6 @@ export function hasPermission(
       COORDINATOR_PERMISSIONS.VIEW_COORDINATORS,
       COORDINATOR_PERMISSIONS.VIEW_COORDINATOR_STUDENTS,
     ],
-    [DefaultRoles.CAMPUS_ADMIN]: [],
     [DefaultRoles.TEACHER]: [],
     [DefaultRoles.STUDENT]: [],
     [DefaultRoles.PARENT]: []

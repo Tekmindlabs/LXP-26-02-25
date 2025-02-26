@@ -236,19 +236,19 @@ export default function TeacherForm({
   }, [teacherData, teacherCampuses, form]);
 
   const onSubmit = async (data: TeacherFormValues) => {
-    setLoading(true);
     try {
-      if (teacherId) {
-        await updateTeacher.mutateAsync({
-          id: teacherId,
-          ...data,
-        });
-      } else {
+      if (isCreate) {
         await createTeacher.mutateAsync(data);
+        toast.success("Teacher created successfully");
+        router.push(`/dashboard/super-admin/campus/${initialData.campusId}`);
+      } else if (teacherId) {
+        await updateTeacher.mutateAsync({ ...data, teacherId });
+        toast.success("Teacher updated successfully");
+        if (onClose) onClose();
       }
     } catch (error) {
-      console.error(teacherId ? "Failed to update teacher:" : "Failed to create teacher:", error);
-      setLoading(false);
+      const apiError = error as ApiError;
+      toast.error(apiError.message || "Something went wrong");
     }
   };
 

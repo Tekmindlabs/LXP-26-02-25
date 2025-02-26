@@ -5,6 +5,7 @@ export enum Status {
 }
 
 export enum UserType {
+	SUPER_ADMIN = 'super-admin',
 	ADMIN = 'ADMIN',
 	COORDINATOR = 'COORDINATOR',
 	TEACHER = 'TEACHER',
