@@ -3,6 +3,8 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { Status, UserType, type Prisma } from "@prisma/client";
 import * as XLSX from 'xlsx';
 import { generatePassword } from "../../../utils/password";
+import { CampusTeacherService } from "../../services/CampusTeacherService";
+import { CampusUserService } from "../../services/CampusUserService";
 
 interface WeeklyHours {
 	dayName: string;
@@ -778,5 +780,23 @@ export const teacherRouter = createTRPCRouter({
 			};
 
 			return analytics;
+		}),
+
+	getTeacherCampuses: protectedProcedure
+		.input(z.object({
+			teacherId: z.string(),
+			includeInactive: z.boolean().optional()
+		}))
+		.query(async ({ ctx, input }) => {
+			const campusTeacherService = new CampusTeacherService(
+				ctx.prisma,
+				new CampusUserService(ctx.prisma)
+			);
+			
+			return campusTeacherService.getCampusesForTeacher(
+				ctx.session.user.id,
+				input.teacherId,
+				input.includeInactive
+			);
 		}),
 });

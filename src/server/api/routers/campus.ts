@@ -7,6 +7,7 @@ import { CampusUserService } from "@/server/services/CampusUserService";
 import { CampusClassService } from "@/server/services/CampusClassService";
 import type { Context } from "../trpc";
 import { type PrismaClient, Prisma, type Status } from "@prisma/client";
+import { CampusTeacherService } from "@/server/services/CampusTeacherService";
 
 const campusCreateInput = z.object({ 
   name: z.string(),
@@ -329,55 +330,34 @@ export const campusRouter = createTRPCRouter({
       });
     }),
 
-    getTeachers: protectedProcedure
+  getTeachers: protectedProcedure
     .input(z.object({
       campusId: z.string(),
       status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
       search: z.string().optional(),
+      includeInactive: z.boolean().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      // Find teachers who are assigned to classes in this campus
-      return ctx.prisma.user.findMany({
-        where: {
-          userType: 'TEACHER',
-          teacherProfile: {
-            // Use the classes relation instead of campuses
-            classes: {
-              some: {
-                class: {
-                  campusId: input.campusId,
-                },
-                status: input.status || 'ACTIVE',
-              },
-            },
-          },
-          ...(input.search && {
-            OR: [
-              { name: { contains: input.search, mode: "insensitive" } },
-              { email: { contains: input.search, mode: "insensitive" } },
-            ],
-          }),
-        },
-        include: {
-          teacherProfile: {
-            include: {
-              subjects: {
-                include: {
-                  subject: true,
-                },
-              },
-              classes: {
-                include: {
-                  class: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: {
-          name: 'asc',
-        },
-      });
+      const campusTeacherService = new CampusTeacherService(
+        ctx.prisma,
+        new CampusUserService(ctx.prisma)
+      );
+      
+      const teachers = await campusTeacherService.getTeachersForCampus(
+        ctx.session.user.id,
+        input.campusId,
+        input.includeInactive
+      );
+      
+      // Apply search filter if provided
+      if (input.search) {
+        return teachers.filter(teacher => 
+          teacher.name?.toLowerCase().includes(input.search!.toLowerCase()) ||
+          teacher.email?.toLowerCase().includes(input.search!.toLowerCase())
+        );
+      }
+      
+      return teachers;
     }),
 
   getBuildings: protectedProcedure
@@ -856,45 +836,81 @@ export const campusRouter = createTRPCRouter({
       });
     }),
 
-  getTeachers: protectedProcedure
+  // Add new teacher-campus management procedures
+  assignTeacherToCampus: protectedProcedure
     .input(z.object({
+      campusId: z.string(),
+      teacherId: z.string(),
+      isPrimary: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const campusTeacherService = new CampusTeacherService(
+        ctx.prisma,
+        new CampusUserService(ctx.prisma)
+      );
+      
+      return campusTeacherService.assignTeacherToCampus(
+        ctx.session.user.id,
+        input.campusId,
+        input.teacherId,
+        input.isPrimary
+      );
+    }),
+
+  removeTeacherFromCampus: protectedProcedure
+    .input(z.object({
+      campusId: z.string(),
+      teacherId: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const campusTeacherService = new CampusTeacherService(
+        ctx.prisma,
+        new CampusUserService(ctx.prisma)
+      );
+      
+      return campusTeacherService.removeTeacherFromCampus(
+        ctx.session.user.id,
+        input.campusId,
+        input.teacherId
+      );
+    }),
+
+  updateTeacherCampusStatus: protectedProcedure
+    .input(z.object({
+      campusId: z.string(),
+      teacherId: z.string(),
+      status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED'])
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const campusTeacherService = new CampusTeacherService(
+        ctx.prisma,
+        new CampusUserService(ctx.prisma)
+      );
+      
+      return campusTeacherService.updateTeacherCampusStatus(
+        ctx.session.user.id,
+        input.campusId,
+        input.teacherId,
+        input.status
+      );
+    }),
+
+  setPrimaryCampus: protectedProcedure
+    .input(z.object({
+      teacherId: z.string(),
       campusId: z.string()
     }))
-    .query(async ({ ctx, input }) => {
-      const teachers = await ctx.prisma.user.findMany({
-        where: {
-          userType: 'TEACHER',
-          teacherProfile: {
-            campuses: {
-              some: {
-                campusId: input.campusId,
-                status: 'ACTIVE'
-              }
-            }
-          }
-        },
-        include: {
-          teacherProfile: {
-            include: {
-              subjects: {
-                include: {
-                  subject: true
-                }
-              },
-              classes: {
-                include: {
-                  class: true
-                }
-              }
-            }
-          }
-        },
-        orderBy: {
-          name: 'asc'
-        }
-      });
-
-      return teachers;
+    .mutation(async ({ ctx, input }) => {
+      const campusTeacherService = new CampusTeacherService(
+        ctx.prisma,
+        new CampusUserService(ctx.prisma)
+      );
+      
+      return campusTeacherService.setPrimaryCampus(
+        ctx.session.user.id,
+        input.teacherId,
+        input.campusId
+      );
     }),
 });
 

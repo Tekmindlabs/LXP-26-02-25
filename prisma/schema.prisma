@@ -102,6 +102,7 @@ model Campus {
   classes   Class[]
   programs  Program[]             @relation("ProgramCampuses")
   coordinators     CoordinatorProfile[]
+  teachers  TeacherCampus[]       // Add relation to TeacherCampus
   // Audit fields
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -585,6 +586,7 @@ model TeacherProfile {
   specialization String?
   subjects       TeacherSubject[]
   classes        TeacherClass[]
+  campuses        TeacherCampus[]  // Add relation to TeacherCampus
   periods        Period[]
   availability   String?
   permissions    String[]         @default([])
@@ -1918,4 +1920,20 @@ model ActivityAnalytics {
   trackingEnabled  Boolean   @default(true)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+}
+
+model TeacherCampus {
+  id          String         @id @default(cuid())
+  teacherId   String
+  campusId    String
+  isPrimary   Boolean        @default(false)
+  status      Status         @default(ACTIVE)
+  joinedAt    DateTime       @default(now())
+  teacher     TeacherProfile @relation(fields: [teacherId], references: [id])
+  campus      Campus         @relation(fields: [campusId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  @@unique([teacherId, campusId])
+  @@map("teacher_campuses")
 }
