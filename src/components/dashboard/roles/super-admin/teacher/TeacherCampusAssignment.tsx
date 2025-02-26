@@ -162,9 +162,9 @@ const TeacherCampusAssignment: React.FC<TeacherCampusAssignmentProps> = ({
             </div>
             <Button
               onClick={handleAssign}
-              disabled={!selectedCampus || assignCampusMutation.isLoading}
+              disabled={!selectedCampus || assignCampusMutation.isPending}
             >
-              {assignCampusMutation.isLoading ? "Assigning..." : "Assign"}
+              {assignCampusMutation.isPending ? "Assigning..." : "Assign"}
             </Button>
           </div>
         </CardContent>
@@ -215,7 +215,7 @@ const TeacherCampusAssignment: React.FC<TeacherCampusAssignmentProps> = ({
                         variant="outline"
                         size="icon"
                         onClick={() => handleSetPrimary(campus.id)}
-                        disabled={setPrimaryCampusMutation.isLoading}
+                        disabled={setPrimaryCampusMutation.isPending}
                         title="Set as primary campus"
                       >
                         <Star className="h-4 w-4" />
@@ -235,7 +235,7 @@ const TeacherCampusAssignment: React.FC<TeacherCampusAssignmentProps> = ({
                       variant="destructive"
                       size="icon"
                       onClick={() => handleRemove(campus.id)}
-                      disabled={removeCampusMutation.isLoading}
+                      disabled={removeCampusMutation.isPending}
                       title="Remove from campus"
                     >
                       <X className="h-4 w-4" />

@@ -565,9 +565,9 @@ export const campusRouter = createTRPCRouter({
         // Get program subjects
         const subjects = await ctx.prisma.subject.findMany({
           where: {
-            programs: {
+            programSubjects: {
               some: {
-                id: classGroup.program.id
+                programId: classGroup.program.id
               }
             }
           }
@@ -575,7 +575,7 @@ export const campusRouter = createTRPCRouter({
 
         // Create teacher assignments
         if (subjects.length > 0) {
-          await ctx.prisma.teacher.createMany({
+          await ctx.prisma.teacherClass.createMany({
             data: subjects.map(subject => ({
               classId: newClass.id,
               subjectId: subject.id,
@@ -973,18 +973,30 @@ export const campusRouter = createTRPCRouter({
       const newClass = await ctx.prisma.class.create({
         data: {
           name: input.name,
-          // Use a custom code generator if code is not provided
-          code: input.code || input.name.substring(0, 3).toUpperCase(),
+          // We'll set the code in a separate update since it's not in the schema
           campusId: input.campusId,
           classGroupId: input.classGroupId,
           status: "ACTIVE"
         }
       });
+      
+      // Update with code if provided
+      if (input.code) {
+        await ctx.prisma.$executeRaw`
+          UPDATE "Class" 
+          SET "code" = ${input.code}
+          WHERE "id" = ${newClass.id}
+        `;
+      }
 
       // Get program subjects
       const subjects = await ctx.prisma.subject.findMany({
         where: {
-          programId: classGroup.program.id
+          programSubjects: {
+            some: {
+              programId: classGroup.programId
+            }
+          }
         }
       });
 
@@ -992,7 +1004,7 @@ export const campusRouter = createTRPCRouter({
       if (subjects.length > 0) {
         const activeTeachers = await ctx.prisma.teacherProfile.findMany({
           where: {
-            teacherCampus: {
+            TeacherCampus: {
               some: {
                 campusId: input.campusId,
                 status: "ACTIVE"
@@ -1008,12 +1020,7 @@ export const campusRouter = createTRPCRouter({
                 classId: newClass.id,
                 teacherId: activeTeachers[0].id,
                 status: "ACTIVE",
-                // Create a separate record for each subject
-                subject: {
-                  connect: {
-                    id: subject.id
-                  }
-                }
+                subjectId: subject.id
               }
             })
           ));

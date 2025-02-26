@@ -74,7 +74,7 @@ export class CampusTeacherService {
     const hasPermission = await this.userService.hasPermission(
       userId,
       campusId,
-      CampusPermission.MANAGE_CAMPUS_USERS
+      CampusPermission.MANAGE_CAMPUS_TEACHERS
     );
     
     if (!hasPermission) {
@@ -181,7 +181,7 @@ export class CampusTeacherService {
     const hasPermission = await this.userService.hasPermission(
       userId,
       campusId,
-      CampusPermission.MANAGE_CAMPUS_USERS
+      CampusPermission.MANAGE_CAMPUS_TEACHERS
     );
     
     if (!hasPermission) {
@@ -222,7 +222,7 @@ export class CampusTeacherService {
     const hasPermission = await this.userService.hasPermission(
       userId,
       campusId,
-      CampusPermission.VIEW_CAMPUS
+      CampusPermission.VIEW_CAMPUS_CLASSES
     );
     
     if (!hasPermission) {
@@ -352,7 +352,7 @@ export class CampusTeacherService {
     const hasPermission = await this.userService.hasPermission(
       userId,
       campusId,
-      CampusPermission.MANAGE_CAMPUS_USERS
+      CampusPermission.MANAGE_CAMPUS_TEACHERS
     );
     
     if (!hasPermission) {
