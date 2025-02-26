@@ -31,7 +31,7 @@ export const BulkStudentUpload = () => {
 	const [selectedCampus, setSelectedCampus] = useState<string>('');
 	const { toast } = useToast();
 
-	const { data: campuses } = api.campus.list.useQuery();
+	const { data: campuses } = api.campus.getAll.useQuery();
 	const { data: classes } = api.class.searchClasses.useQuery(
 		{ campusId: selectedCampus },
 		{ enabled: !!selectedCampus }
@@ -105,41 +105,34 @@ export const BulkStudentUpload = () => {
 	};
 
 	const handleUpload = async () => {
-		if (!file || !selectedCampus) return;
+		if (!file) return;
 
 		try {
-			setUploadProgress(10);
 			const students = await processCSV(file);
-			setUploadProgress(30);
-
-			// Split into chunks of 100 students
 			const chunkSize = 100;
 			const chunks = [];
+
 			for (let i = 0; i < students.length; i += chunkSize) {
 				chunks.push(students.slice(i, i + chunkSize));
 			}
 
-			// Process each chunk
+			setUploadProgress(30);
+
 			let processed = 0;
 			for (const chunk of chunks) {
-				await bulkCreateMutation.mutateAsync(chunk);
+				// Create FormData for each chunk
+				const formData = new FormData();
+				formData.append('students', JSON.stringify(chunk));
+				await bulkCreateMutation.mutateAsync(formData);
 				processed += chunk.length;
 				setUploadProgress(30 + (70 * processed) / students.length);
 			}
-
-			toast({
-				title: 'Success',
-				description: `Successfully processed ${students.length} students`,
-			});
 		} catch (error) {
 			toast({
 				title: 'Error',
-				description: error instanceof Error ? error.message : 'An error occurred while processing the file',
+				description: 'Failed to process or upload file',
 				variant: 'destructive',
 			});
-		} finally {
-			setUploadProgress(100);
-			setTimeout(() => setUploadProgress(0), 1000);
 		}
 	};
 
@@ -189,7 +182,7 @@ export const BulkStudentUpload = () => {
 									<SelectValue placeholder="Select a campus" />
 								</SelectTrigger>
 								<SelectContent>
-									{campuses?.map((campus) => (
+									{campuses?.map((campus: { id: string; name: string }) => (
 										<SelectItem key={campus.id} value={campus.id}>
 											{campus.name}
 										</SelectItem>
