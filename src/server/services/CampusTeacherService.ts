@@ -1,6 +1,6 @@
 import { PrismaClient, Status, Prisma } from "@prisma/client";
 import { CampusUserService } from "./CampusUserService";
-import { CampusPermission } from "../../types/campus";
+import { CampusPermission } from "../../types/enums";
 import { TRPCError } from "@trpc/server";
 
 // Define custom types for the teacher-campus relationship

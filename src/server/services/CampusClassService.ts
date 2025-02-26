@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma, ClassGroup } from "@prisma/client";
-import { CampusPermission } from "../../types/campus";
+import { CampusPermission } from "../../types/enums";
 import { CampusUserService } from "./CampusUserService";
 import { TRPCError } from "@trpc/server";
 

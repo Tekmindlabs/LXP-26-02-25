@@ -1,8 +1,10 @@
 import { TRPCError } from '@trpc/server';
 import { initTRPC } from '@trpc/server';
 import type { Context } from '../api/trpc';
-import { CampusPermission } from '@/types/campus';
+import { CampusPermission } from '../../types/enums';
 import { DefaultRoles } from '@/utils/permissions';
+import { NextApiRequest, NextApiResponse } from 'next';
+import { getServerSession } from 'next-auth';
 
 const t = initTRPC.context<Context>().create();
 const middleware = t.middleware;

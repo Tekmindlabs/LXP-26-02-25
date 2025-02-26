@@ -1,5 +1,6 @@
-import { PrismaClient } from "@prisma/client";
-import { CampusPermission, CampusRoleType } from "../../types/campus";
+import { PrismaClient, UserType } from "@prisma/client";
+import { CampusPermission } from "../../types/enums";
+import { CampusRoleType } from "../../types/campus";
 import { TRPCError } from "@trpc/server";
 
 interface CampusRoleInfo {
@@ -87,6 +88,18 @@ export class CampusUserService {
   }
 
   async hasPermission(userId: string, campusId: string, permission: CampusPermission): Promise<boolean> {
+    // First check if user is a super-admin
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: { userType: true }
+    });
+
+    // Super-admin has all permissions
+    if (user?.userType === UserType.SUPER_ADMIN) {
+      return true;
+    }
+
+    // For other users, check campus-specific permissions
     const result = await this.db.campusRole.findFirst({
       where: {
         AND: [

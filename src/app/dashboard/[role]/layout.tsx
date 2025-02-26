@@ -178,11 +178,12 @@ const studentNavItems = [
 	},
 ];
 
-export default async function RoleLayout({
+export default async function Layout({
 	children,
-	params: { role },
+	params,
 }: LayoutProps) {
 	const session = await getServerAuthSession();
+	const role = params.role;
 
 	if (!session) {
 		redirect("/auth/signin");

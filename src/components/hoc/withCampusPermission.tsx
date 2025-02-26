@@ -2,7 +2,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api } from '@/utils/api';
-import type { CampusPermission } from '@/types/campus';
+import type { CampusPermission } from '@/types/enums';
 
 export function withCampusPermission<P extends object>(
 	WrappedComponent: React.ComponentType<P>,

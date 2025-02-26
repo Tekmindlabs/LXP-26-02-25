@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { TeacherProfile } from "../../types/teacher";
-import { CampusPermission } from "../../types/campus";
+import { CampusPermission } from "../../types/enums";
 import { CampusUserService } from "./CampusUserService";
 
 interface AttendanceStats {

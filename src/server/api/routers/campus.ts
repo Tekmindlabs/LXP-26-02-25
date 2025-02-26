@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { CampusPermission, CampusRoleType } from "@/types/campus";
+import { CampusPermission } from "@/types/enums";
+import { CampusRoleType } from "@/types/campus";
 import { DefaultRoles } from "@/utils/permissions";
 import { CampusUserService } from "@/server/services/CampusUserService";
 import { CampusClassService } from "@/server/services/CampusClassService";

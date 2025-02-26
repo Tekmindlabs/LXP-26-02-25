@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { CampusUserService } from "../../services/CampusUserService";
-import { CampusPermission, CampusRoleType } from "../../../types/campus"; // Updated import path
+import { CampusRoleType } from "../../../types/campus";
+import { CampusPermission } from "../../../types/enums";
 import { TRPCError } from "@trpc/server";
 
 export const campusUserRouter = createTRPCRouter({

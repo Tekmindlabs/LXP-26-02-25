@@ -39,23 +39,17 @@ export enum CampusRole {
 }
 
 export enum CampusPermission {
-	VIEW_CAMPUS = 'VIEW_CAMPUS',
-	MANAGE_CAMPUS = 'MANAGE_CAMPUS',
-	MANAGE_BUILDINGS = 'MANAGE_BUILDINGS',
-	MANAGE_ROOMS = 'MANAGE_ROOMS',
-	MANAGE_CLASSES = 'MANAGE_CLASSES',
-	VIEW_BUILDINGS = 'VIEW_BUILDINGS',
-	VIEW_ROOMS = 'VIEW_ROOMS',
-	VIEW_REPORTS = 'VIEW_REPORTS',
-	MANAGE_CAMPUS_USERS = 'MANAGE_CAMPUS_USERS',
-	VIEW_CAMPUS_USERS = 'VIEW_CAMPUS_USERS',
-	MANAGE_ATTENDANCE = 'MANAGE_ATTENDANCE',
-	VIEW_ATTENDANCE = 'VIEW_ATTENDANCE',
-	MANAGE_GRADES = 'MANAGE_GRADES',
-	VIEW_GRADES = 'VIEW_GRADES',
-	VIEW_CAMPUS_CLASSES = 'VIEW_CAMPUS_CLASSES'
+	MANAGE_CAMPUS = "campus:manage",
+	MANAGE_CAMPUS_CLASSES = "campus:manage-classes",
+	MANAGE_CAMPUS_TEACHERS = "campus:manage-teachers",
+	MANAGE_CAMPUS_STUDENTS = "campus:manage-students",
+	MANAGE_CAMPUS_TIMETABLES = "campus:manage-timetables",
+	MANAGE_CAMPUS_ATTENDANCE = "campus:manage-attendance",
+	VIEW_CAMPUS_ANALYTICS = "campus:view-analytics",
+	VIEW_PROGRAMS = "campus:view-programs",
+	VIEW_CAMPUS_CLASSES = "campus:view-classes",
+	VIEW_CLASS_GROUPS = "campus:view-class-groups"
 }
-
 
 export enum AttendanceStatus {
 	PRESENT = 'PRESENT',

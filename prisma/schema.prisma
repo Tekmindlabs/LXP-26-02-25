@@ -102,7 +102,7 @@ model Campus {
   classes   Class[]
   programs  Program[]             @relation("ProgramCampuses")
   coordinators     CoordinatorProfile[]
-  teachers  TeacherCampus[]       // Add relation to TeacherCampus
+  teachers  TeacherCampus[]
   // Audit fields
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -586,7 +586,7 @@ model TeacherProfile {
   specialization String?
   subjects       TeacherSubject[]
   classes        TeacherClass[]
-  campuses        TeacherCampus[]  // Add relation to TeacherCampus
+  campuses        TeacherCampus[]
   periods        Period[]
   availability   String?
   permissions    String[]         @default([])
@@ -1336,6 +1336,7 @@ enum UserType {
   TEACHER
   STUDENT
   PARENT
+  SUPER_ADMIN
 }
 
 enum Status {
@@ -1923,17 +1924,16 @@ model ActivityAnalytics {
 }
 
 model TeacherCampus {
-  id          String         @id @default(cuid())
-  teacherId   String
-  campusId    String
-  isPrimary   Boolean        @default(false)
-  status      Status         @default(ACTIVE)
-  joinedAt    DateTime       @default(now())
-  teacher     TeacherProfile @relation(fields: [teacherId], references: [id])
-  campus      Campus         @relation(fields: [campusId], references: [id])
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  
+  id        String   @id @default(cuid())
+  teacherId String
+  campusId  String
+  status    String   @default("ACTIVE") // or use enum if you prefer
+  isPrimary Boolean  @default(false)
+  joinedAt  DateTime @default(now())
+
+  teacher TeacherProfile @relation(fields: [teacherId], references: [id])
+  campus  Campus        @relation(fields: [campusId], references: [id])
+
   @@unique([teacherId, campusId])
-  @@map("teacher_campuses")
+  @@map("teacher_campus")
 }
