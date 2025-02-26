@@ -29,7 +29,7 @@ export async function seedUsers(prisma: PrismaClient): Promise<SeedUsersResult> 
 			name: 'System Administrator',
 			email: 'admin@earlyyears.edu',
 			password: superAdminPassword,
-			userType: UserType.SUPER_ADMIN,
+			userType: 'super-admin' as UserType,
 			status: Status.ACTIVE
 		}
 	});
@@ -44,7 +44,9 @@ export async function seedUsers(prisma: PrismaClient): Promise<SeedUsersResult> 
 			userType: UserType.COORDINATOR,
 			status: Status.ACTIVE,
 			coordinatorProfile: {
-				create: {}
+				create: {
+					coordinatorType: 'PROGRAM'
+				}
 			}
 		},
 		include: {

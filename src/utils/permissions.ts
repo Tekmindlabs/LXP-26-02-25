@@ -1,3 +1,5 @@
+import { CampusPermission } from '@/types/enums';
+
 export const Permissions = {
   // User permissions
   USER_CREATE: "user:create",
@@ -67,12 +69,12 @@ export type AllPermissions = PermissionString | CoordinatorPermissionString;
 export type Permission = PermissionString;
 
 export enum DefaultRoles {
-  SUPER_ADMIN = "super-admin",
-  ADMIN = "ADMIN",
-  COORDINATOR = "COORDINATOR",
-  TEACHER = "TEACHER",
-  STUDENT = "STUDENT",
-  PARENT = "PARENT"
+  SUPER_ADMIN = 'super-admin',
+  ADMIN = 'ADMIN',
+  COORDINATOR = 'COORDINATOR',
+  TEACHER = 'TEACHER',
+  STUDENT = 'STUDENT',
+  PARENT = 'PARENT'
 }
 
 export const COORDINATOR_PERMISSIONS = {
@@ -143,57 +145,55 @@ export const hasRole = (userRoles: string[], role: DefaultRoles) => {
 };
 
 export const hasAnyRole = (userRoles: string[], roles: DefaultRoles[]) => {
-  return roles.some(role => userRoles.includes(role));
+  return roles.some(role => hasRole(userRoles, role));
 };
 
-export const RolePermissions: Record<DefaultRoles, Permission[]> = {
+export const RolePermissions = {
   [DefaultRoles.SUPER_ADMIN]: [
-    ...Object.values(Permissions),
+    CampusPermission.MANAGE_CAMPUS,
+    CampusPermission.MANAGE_CAMPUS_CLASSES,
+    CampusPermission.MANAGE_CAMPUS_TEACHERS,
+    CampusPermission.MANAGE_CAMPUS_STUDENTS,
+    CampusPermission.MANAGE_CAMPUS_TIMETABLES,
+    CampusPermission.MANAGE_CAMPUS_ATTENDANCE,
+    CampusPermission.VIEW_CAMPUS_ANALYTICS,
+    CampusPermission.VIEW_PROGRAMS,
+    CampusPermission.VIEW_CAMPUS_CLASSES,
+    CampusPermission.VIEW_CLASS_GROUPS
   ],
   [DefaultRoles.ADMIN]: [
-    Permissions.USER_CREATE,
-    Permissions.USER_READ,
-    Permissions.USER_UPDATE,
-    Permissions.USER_DELETE,
-    Permissions.ROLE_READ,
-    Permissions.SETTINGS_MANAGE,
-    Permissions.CLASS_GROUP_VIEW,
-    Permissions.CLASS_GROUP_MANAGE,
-    Permissions.GRADEBOOK_VIEW,
-    Permissions.GRADEBOOK_OVERVIEW,
-    Permissions.GRADEBOOK_MANAGE,
-    Permissions.GRADE_ACTIVITY,
-    Permissions.GRADE_MODIFY,
-    Permissions.CAMPUS_VIEW,
+    CampusPermission.MANAGE_CAMPUS,
+    CampusPermission.MANAGE_CAMPUS_CLASSES,
+    CampusPermission.MANAGE_CAMPUS_TEACHERS,
+    CampusPermission.MANAGE_CAMPUS_STUDENTS,
+    CampusPermission.VIEW_CAMPUS_ANALYTICS,
+    CampusPermission.VIEW_PROGRAMS,
+    CampusPermission.VIEW_CAMPUS_CLASSES,
+    CampusPermission.VIEW_CLASS_GROUPS
   ],
   [DefaultRoles.COORDINATOR]: [
-    Permissions.USER_READ,
-    Permissions.CLASS_GROUP_VIEW,
-    Permissions.CLASS_VIEW,
-    Permissions.GRADEBOOK_VIEW,
-    Permissions.GRADEBOOK_OVERVIEW,
-    Permissions.SUBJECT_VIEW,
+    CampusPermission.MANAGE_CAMPUS_CLASSES,
+    CampusPermission.MANAGE_CAMPUS_TEACHERS,
+    CampusPermission.MANAGE_CAMPUS_STUDENTS,
+    CampusPermission.VIEW_CAMPUS_ANALYTICS,
+    CampusPermission.VIEW_PROGRAMS,
+    CampusPermission.VIEW_CAMPUS_CLASSES,
+    CampusPermission.VIEW_CLASS_GROUPS
   ],
   [DefaultRoles.TEACHER]: [
-    Permissions.USER_READ,
-    Permissions.CLASS_VIEW,
-    Permissions.GRADEBOOK_VIEW,
-    Permissions.GRADEBOOK_MANAGE,
-    Permissions.GRADE_ACTIVITY,
-    Permissions.GRADE_MODIFY,
-    Permissions.SUBJECT_VIEW,
+    CampusPermission.VIEW_CAMPUS_CLASSES,
+    CampusPermission.VIEW_CLASS_GROUPS,
+    CampusPermission.VIEW_PROGRAMS
   ],
   [DefaultRoles.STUDENT]: [
-    Permissions.USER_READ,
-    Permissions.CLASS_VIEW,
-    Permissions.GRADEBOOK_VIEW,
+    CampusPermission.VIEW_CAMPUS_CLASSES,
+    CampusPermission.VIEW_CLASS_GROUPS
   ],
   [DefaultRoles.PARENT]: [
-    Permissions.USER_READ,
-    Permissions.CLASS_VIEW,
-    Permissions.GRADEBOOK_VIEW,
-  ],
-};
+    CampusPermission.VIEW_CAMPUS_CLASSES,
+    CampusPermission.VIEW_CLASS_GROUPS
+  ]
+} as const;
 
 import type { Session } from 'next-auth';
 
@@ -228,3 +228,12 @@ export function hasPermission(
 
   return coordinatorPermissionMap[userRole]?.includes(permission as keyof typeof COORDINATOR_PERMISSIONS) ?? false;
 }
+
+export type RoleType = keyof typeof DefaultRoles;
+
+export const hasPermission = (userRoles: string[], permission: CampusPermission): boolean => {
+  return userRoles.some(role => {
+    const roleKey = role as DefaultRoles;
+    return RolePermissions[roleKey]?.includes(permission) ?? false;
+  });
+};

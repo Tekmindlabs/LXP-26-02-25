@@ -15,6 +15,20 @@ import {
 	Building2
 } from 'lucide-react';
 
+interface CampusStats {
+	id: string;
+	name: string;
+	code: string;
+	type: string;
+	status: string;
+	programCount: number;
+	classGroupCount: number;
+	classCount: number;
+	teacherCount: number;
+	coordinatorCount: number;
+	studentCount: number;
+}
+
 interface CampusPageProps {
 	params: {
 		id: string;
@@ -24,7 +38,7 @@ interface CampusPageProps {
 
 export default function CampusPage({ params }: CampusPageProps) {
 	const router = useRouter();
-	const { data: campus, isLoading } = api.campus.get.useQuery({ id: params.id });
+	const { data: campus, isLoading } = api.campus.getStats.useQuery(params.id);
 
 	if (isLoading) {
 		return (
@@ -33,7 +47,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 					<Skeleton className="h-8 w-64" />
 					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 						{[...Array(6)].map((_, i) => (
-							<Skeleton key={i} className="h-40" />
+							<Skeleton key={i} className="h-32" />
 						))}
 					</div>
 				</div>
@@ -49,80 +63,79 @@ export default function CampusPage({ params }: CampusPageProps) {
 		);
 	}
 
-	const sections = [
-		{
-			title: 'Programs',
-			description: 'Manage academic programs',
-			icon: School,
-			href: `programs`,
-			count: campus.programCount || 0,
-		},
-		{
-			title: 'Class Groups',
-			description: 'Manage class groups',
-			icon: Building2,
-			href: `class-groups`,
-			count: campus.classGroupCount || 0,
-		},
-		{
-			title: 'Classes',
-			description: 'Manage classes and subjects',
-			icon: BookOpen,
-			href: `classes`,
-			count: campus.classCount || 0,
-		},
-		{
-			title: 'Teachers',
-			description: 'Manage teaching staff',
-			icon: Users,
-			href: `teachers`,
-			count: campus.teacherCount || 0,
-		},
-		{
-			title: 'Students',
-			description: 'Manage student enrollment',
-			icon: GraduationCap,
-			href: `students`,
-			count: campus.studentCount || 0,
-		},
-		{
-			title: 'Coordinators',
-			description: 'Manage program coordinators',
-			icon: UserCog,
-			href: `coordinators`,
-			count: campus.coordinatorCount || 0,
-		},
-	];
-
 	return (
 		<DashboardContent role={params.role} campusId={params.id}>
 			<div className="space-y-6">
 				<div>
 					<h2 className="text-3xl font-bold tracking-tight">{campus.name}</h2>
-					<p className="text-muted-foreground">{campus.address}</p>
 				</div>
 
 				<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{sections.map((section) => (
-						<Card
-							key={section.href}
-							className="cursor-pointer hover:bg-accent/50 transition-colors"
-							onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/${section.href}`)}
-						>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="text-sm font-medium">
-									{section.title}
-								</CardTitle>
-								<section.icon className="h-4 w-4 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								<div className="text-2xl font-bold">{section.count}</div>
-								<p className="text-xs text-muted-foreground">
-									{section.description}
-								</p>
-							</CardContent>
-						</Card>
-					))}
+					<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/programs`)}>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+							<CardTitle className="text-sm font-medium">Programs</CardTitle>
+							<GraduationCap className="h-4 w-4 text-muted-foreground" />
+						</CardHeader>
+						<CardContent>
+							<div className="text-2xl font-bold">{campus.programCount}</div>
+							<p className="text-xs text-muted-foreground">Active academic programs</p>
+						</CardContent>
+					</Card>
+
+					<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/class-groups`)}>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+							<CardTitle className="text-sm font-medium">Class Groups</CardTitle>
+							<School className="h-4 w-4 text-muted-foreground" />
+						</CardHeader>
+						<CardContent>
+							<div className="text-2xl font-bold">{campus.classGroupCount}</div>
+							<p className="text-xs text-muted-foreground">Active class groups</p>
+						</CardContent>
+					</Card>
+
+					<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/classes`)}>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+							<CardTitle className="text-sm font-medium">Classes</CardTitle>
+							<BookOpen className="h-4 w-4 text-muted-foreground" />
+						</CardHeader>
+						<CardContent>
+							<div className="text-2xl font-bold">{campus.classCount}</div>
+							<p className="text-xs text-muted-foreground">Active classes</p>
+						</CardContent>
+					</Card>
+
+					<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/teachers`)}>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+							<CardTitle className="text-sm font-medium">Teachers</CardTitle>
+							<Users className="h-4 w-4 text-muted-foreground" />
+						</CardHeader>
+						<CardContent>
+							<div className="text-2xl font-bold">{campus.teacherCount}</div>
+							<p className="text-xs text-muted-foreground">Active teachers</p>
+						</CardContent>
+					</Card>
+
+					<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/coordinators`)}>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+							<CardTitle className="text-sm font-medium">Coordinators</CardTitle>
+							<UserCog className="h-4 w-4 text-muted-foreground" />
+						</CardHeader>
+						<CardContent>
+							<div className="text-2xl font-bold">{campus.coordinatorCount}</div>
+							<p className="text-xs text-muted-foreground">Active coordinators</p>
+						</CardContent>
+					</Card>
+
+					<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/students`)}>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+							<CardTitle className="text-sm font-medium">Students</CardTitle>
+							<Building2 className="h-4 w-4 text-muted-foreground" />
+						</CardHeader>
+						<CardContent>
+							<div className="text-2xl font-bold">{campus.studentCount}</div>
+							<p className="text-xs text-muted-foreground">Active students</p>
+						</CardContent>
+					</Card>
 				</div>
 			</div>
 		</DashboardContent>

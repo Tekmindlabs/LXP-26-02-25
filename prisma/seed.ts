@@ -1,72 +1,60 @@
 import { PrismaClient } from '@prisma/client';
 import { seedPermissions } from './seeds/permissions';
-import { seedUsers } from './seeds/users';
-import { seedAcademicYear } from './seeds/academic-year';
+import { seedSystemSettings } from './seeds/system-settings';
 import { seedCalendar } from './seeds/calendar';
+import { seedCampus } from './seeds/campus';
 import { seedPrograms } from './seeds/programs';
 import { seedClassGroups } from './seeds/class-groups';
-import { seedSubjects } from './seeds/subjects';
 import { seedClasses } from './seeds/classes';
-import { seedClassrooms } from './seeds/classrooms';
-import { seedTimetables } from './seeds/timetables';
-import { seedActivities } from './seeds/activities';
-import { seedAttendance } from './seeds/attendance';
-import { seedSystemSettings } from './seeds/system-settings';
-import { seedBrandingSettings } from './seeds/branding-settings';
-import { seedInstituteSettings } from './seeds/institute-settings';
+import { seedUsers } from './seeds/users';
 
 const prisma = new PrismaClient();
 
-
 async function main() {
-  console.log('Starting database seeding...');
-  
+  console.log('🌱 Starting database seeding...');
+
   try {
-    // Core permissions and users first
-    console.log('Seeding permissions and users...');
-    await seedPermissions(prisma);
-    const { users, campus } = await seedUsers(prisma);
-
-    if (!campus) {
-      throw new Error('Failed to create campus');
-    }
-
-    // Then system settings
-    console.log('Seeding system settings...');
+    // Core system setup
     await seedSystemSettings(prisma);
-    await seedBrandingSettings(prisma);
-    await seedInstituteSettings(prisma);
+    await seedPermissions(prisma);
+    
+    // Calendar setup
+    const calendar = await seedCalendar(prisma);
+    console.log('Calendar created:', calendar.name);
+    
+    // Campus setup
+    const campus = await seedCampus(prisma);
+    console.log('Campus created:', campus.name);
+    
+    // Academic structure setup
+    const program = await seedPrograms(prisma);
+    console.log('Program created:', program.name);
+    
+    const classGroups = await seedClassGroups(prisma);
+    console.log('Class groups created:', classGroups.length);
+    
+    const classes = await seedClasses(prisma);
+    console.log('Classes created:', classes.length);
+    
+    // Users and assignments
+    const { users } = await seedUsers(prisma);
+    console.log('Users created:', {
+      superAdmin: users.superAdmin.name,
+      coordinator: users.coordinator.name,
+      teachers: users.teachers.length,
+      students: users.students.length
+    });
 
-    // Academic structure
-    console.log('Seeding academic structure...');
-    const academicYear = await seedAcademicYear(prisma);
-    const calendar = await seedCalendar(prisma, academicYear.id);
-    const programs = await seedPrograms(prisma, calendar.id);
-    const classGroups = await seedClassGroups(prisma, programs);
-    const subjects = await seedSubjects(prisma, classGroups);
-    const classes = await seedClasses(prisma, classGroups, campus.id);
-    const classrooms = await seedClassrooms(prisma);
-
-    // Timetables and activities
-    console.log('Seeding timetables and activities...');
-    await seedTimetables(prisma, { classGroups, classes, subjects, classrooms });
-    await seedActivities(prisma, { classes, subjects, classGroups });
-
-    // Attendance records
-    console.log('Seeding attendance records...');
-    await seedAttendance(prisma);
-
-    console.log('Database seeding completed successfully');
-
+    console.log('✅ Database seeding completed successfully');
   } catch (error) {
-    console.error('Error during database seeding:', error);
+    console.error('❌ Error during database seeding:', error);
     throw error;
   }
 }
 
 main()
   .catch((e) => {
-    console.error('Fatal error during seeding:', e);
+    console.error(e);
     process.exit(1);
   })
   .finally(async () => {
