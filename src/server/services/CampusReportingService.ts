@@ -153,7 +153,7 @@ export class CampusReportingService {
 		try {
 			const teachers = await this.db.teacherProfile.findMany({
 				where: { 
-					TeacherCampus: {
+					campuses: {
 						some: {
 							campusId: campusId,
 							status: "ACTIVE"
@@ -162,16 +162,24 @@ export class CampusReportingService {
 				},
 				include: {
 					user: true,
-					subjects: true,
-					classes: true
+					subjects: {
+						include: {
+							subject: true
+						}
+					},
+					classes: {
+						include: {
+							class: true
+						}
+					}
 				}
 			});
 
 			return teachers.map(teacher => ({
 				teacherId: teacher.id,
-				teacherName: teacher.user?.name || 'Unknown',
-				classCount: teacher.classes?.length || 0,
-				subjectCount: teacher.subjects?.length || 0,
+				teacherName: teacher.user.name || 'Unknown',
+				classCount: teacher.classes.length || 0,
+				subjectCount: teacher.subjects.length || 0,
 				attendanceStats: [], // Will be implemented if needed
 				subjectStats: [] // Will be implemented if needed
 			}));

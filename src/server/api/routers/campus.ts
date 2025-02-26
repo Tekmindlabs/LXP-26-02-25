@@ -226,33 +226,27 @@ export const campusRouter = createTRPCRouter({
         }),
         ctx.prisma.teacherProfile.count({
           where: {
-            classes: {
+            campuses: {
               some: {
-                class: {
-                  campusId: input.campusId,
-                },
+                id: input.campusId,
               },
             },
           },
         }),
         ctx.prisma.program.count({
           where: {
-            classGroups: {
+            campuses: {
               some: {
-                classes: {
-                  some: {
-                    campusId: input.campusId,
-                  },
-                },
+                id: input.campusId,
               },
             },
           },
         }),
         ctx.prisma.classGroup.count({
           where: {
-            classes: {
+            campusClassGroups: {
               some: {
-                campusId: input.campusId,
+                id: input.campusId,
               },
             },
           },
@@ -473,7 +467,7 @@ export const campusRouter = createTRPCRouter({
       const where: Prisma.ClassGroupWhereInput = {
         campusClassGroups: {
           some: {
-            campusId: input.campusId,
+            id: input.campusId,
           },
         },
         ...(input.status && { status: input.status }),
@@ -596,9 +590,9 @@ export const campusRouter = createTRPCRouter({
         if (subjects.length > 0) {
           const activeTeachers = await ctx.prisma.teacherProfile.findMany({
             where: {
-              TeacherCampus: {
+              campuses: {
                 some: {
-                  campusId: input.campusId,
+                  id: input.campusId,
                   status: "ACTIVE"
                 }
               }
@@ -1058,9 +1052,9 @@ export const campusRouter = createTRPCRouter({
       if (subjects.length > 0) {
         const activeTeachers = await ctx.prisma.teacherProfile.findMany({
           where: {
-            TeacherCampus: {
+            campuses: {
               some: {
-                campusId: input.campusId,
+                id: input.campusId,
                 status: "ACTIVE"
               }
             }
@@ -1179,7 +1173,7 @@ export const campusViewRouter = createTRPCRouter({
         where: {
           campusClassGroups: {
             some: {
-              campusId: input.campusId,
+              id: input.campusId,
             },
           },
         },
