@@ -49,12 +49,12 @@ export default function TeacherAssignmentsPage({
   params: { id: string; role: string; teacherId: string };
 }) {
   const router = useRouter();
-  const { data: teacher, isLoading: teacherLoading } = api.teacher.getOne.useQuery(
-    { teacherId: params.teacherId },
+  const { data: teacher, isLoading: teacherLoading } = api.teacher.get.useQuery(
+    { id: params.teacherId },
     { enabled: !!params.teacherId }
   );
 
-  const { data: assignments, isLoading: assignmentsLoading } = api.teacher.getAssignments.useQuery(
+  const { data: assignments, isLoading: assignmentsLoading } = api.teacher.assignments.useQuery(
     { teacherId: params.teacherId, campusId: params.id },
     { enabled: !!params.teacherId }
   );
@@ -103,7 +103,7 @@ export default function TeacherAssignmentsPage({
 
   if (teacherLoading) {
     return (
-      <DashboardContent>
+      <DashboardContent role={params.role} campusId={params.id}>
         <div className="space-y-6">
           <Skeleton className="h-8 w-[300px]" />
           <Card>
@@ -122,7 +122,7 @@ export default function TeacherAssignmentsPage({
 
   if (!teacher) {
     return (
-      <DashboardContent>
+      <DashboardContent role={params.role} campusId={params.id}>
         <div className="text-center">
           <h2 className="text-2xl font-bold">Teacher not found</h2>
           <p className="text-muted-foreground">The teacher you are looking for does not exist.</p>
@@ -132,7 +132,7 @@ export default function TeacherAssignmentsPage({
   }
 
   return (
-    <DashboardContent>
+    <DashboardContent role={params.role} campusId={params.id}>
       <div className="space-y-6">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">{teacher.name}</h2>

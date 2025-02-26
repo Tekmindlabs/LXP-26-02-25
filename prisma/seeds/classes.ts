@@ -1,105 +1,69 @@
-import { PrismaClient, Status } from '@prisma/client';
-import { ClassGroup } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
-export async function seedClasses(prisma: PrismaClient, classGroups: ClassGroup[], campusId: string) {
-	console.log('Creating demo classes...');
+export async function seedClasses(prisma: PrismaClient) {
+	console.log('Seeding classes...');
 
-	const classesData = [
-		// Elementary Classes
-		{
-			name: 'Grade 1',
-			classGroupId: classGroups[0].id,
-			capacity: 30,
-			description: 'First grade'
-		},
-		// Middle School Classes
-		{
-			name: 'Grade 7',
-			classGroupId: classGroups[1].id,
-			capacity: 35,
-			description: 'Seventh grade'
-		},
-		// High School Classes
-		{
-			name: 'Grade 10',
-			classGroupId: classGroups[2].id,
-			capacity: 40,
-			description: 'Tenth grade'
+	// Get the campus
+	const campus = await prisma.campus.findFirst({
+		where: { name: 'Early Years Campus' }
+	});
+
+	if (!campus) {
+		throw new Error('Campus not found');
+	}
+
+	// Get all class groups
+	const classGroups = await prisma.classGroup.findMany({
+		where: {
+			program: {
+				name: 'Early Childhood Education'
+			}
 		}
-	];
-
-
-	const classes = await Promise.all(
-		classesData.map(classData =>
-			prisma.class.upsert({
-				where: {
-					name_classGroupId: {
-						name: classData.name,
-						classGroupId: classData.classGroupId
-					}
-				},
-				update: {
-					capacity: classData.capacity
-				},
-				create: {
-					name: classData.name,
-					classGroupId: classData.classGroupId,
-					capacity: classData.capacity,
-					status: Status.ACTIVE,
-					campusId: campusId
-				}
-			})
-		)
-	);
-
-	// Assign students to classes
-	const students = await prisma.studentProfile.findMany({
-		include: { user: true }
 	});
 
-	if (students.length > 0) {
-		// Distribute students across classes
-		await Promise.all(
-			students.map(async (student, index) => {
-				const classIndex = index % classes.length;
-				await prisma.studentProfile.update({
-					where: { id: student.id },
-					data: {
-						classId: classes[classIndex].id
-					}
-				});
-			})
-		);
+	if (classGroups.length === 0) {
+		throw new Error('No class groups found');
 	}
 
-	// Assign teachers to classes
-	const teachers = await prisma.teacherProfile.findMany({
-		include: { user: true }
-	});
+	// Create two classes for each class group
+	const classesData = classGroups.flatMap(group => [
+		{
+			name: `${group.name} A`,
+			description: `Section A of ${group.name}`,
+			capacity: group.metadata?.capacity || 20,
+			classGroupId: group.id,
+			campusId: campus.id,
+			status: 'ACTIVE',
+			metadata: {
+				section: 'A',
+				schedule: 'Morning',
+				timing: '8:00 AM - 12:00 PM'
+			}
+		},
+		{
+			name: `${group.name} B`,
+			description: `Section B of ${group.name}`,
+			capacity: group.metadata?.capacity || 20,
+			classGroupId: group.id,
+			campusId: campus.id,
+			status: 'ACTIVE',
+			metadata: {
+				section: 'B',
+				schedule: 'Afternoon',
+				timing: '1:00 PM - 5:00 PM'
+			}
+		}
+	]);
 
-	if (teachers.length > 0) {
-		await Promise.all(
-			classes.map(async (class_, index) => {
-				const teacher = teachers[index % teachers.length];
-				await prisma.teacherClass.upsert({
-					where: {
-						teacherId_classId: {
-							teacherId: teacher.id,
-							classId: class_.id
-						}
-					},
-					update: {},
-					create: {
-						teacherId: teacher.id,
-						classId: class_.id,
-						isClassTeacher: true,
-						status: Status.ACTIVE
-					}
-				});
-			})
-		);
+	const createdClasses = [];
+
+	for (const classData of classesData) {
+		const createdClass = await prisma.class.create({
+			data: classData
+		});
+		createdClasses.push(createdClass);
 	}
 
-	console.log('Classes seeded successfully');
-	return classes;
+	console.log('✅ Classes seeded');
+	return createdClasses;
 }

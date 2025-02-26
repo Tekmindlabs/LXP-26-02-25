@@ -24,11 +24,11 @@ interface CampusPageProps {
 
 export default function CampusPage({ params }: CampusPageProps) {
 	const router = useRouter();
-	const { data: campus, isLoading } = api.campus.getOne.useQuery({ id: params.id });
+	const { data: campus, isLoading } = api.campus.get.useQuery({ id: params.id });
 
 	if (isLoading) {
 		return (
-			<DashboardContent>
+			<DashboardContent role={params.role} campusId={params.id}>
 				<div className="space-y-6">
 					<Skeleton className="h-8 w-64" />
 					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -43,7 +43,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 
 	if (!campus) {
 		return (
-			<DashboardContent>
+			<DashboardContent role={params.role} campusId={params.id}>
 				<div>Campus not found</div>
 			</DashboardContent>
 		);
@@ -95,7 +95,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 	];
 
 	return (
-		<DashboardContent>
+		<DashboardContent role={params.role} campusId={params.id}>
 			<div className="space-y-6">
 				<div>
 					<h2 className="text-3xl font-bold tracking-tight">{campus.name}</h2>
