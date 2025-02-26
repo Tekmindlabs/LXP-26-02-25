@@ -1,109 +1,248 @@
 'use client';
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { api } from "@/utils/api";
-import { toast } from "sonner";
-import { InfoCircledIcon } from "@radix-ui/react-icons";
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { api } from '@/utils/api';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Status } from '@prisma/client';
+import { Progress } from '@/components/ui/progress';
+import { Download, Upload } from 'lucide-react';
 
-interface UploadResult {
-	successful: number;
-	failed: number;
-	errors: string[];
+interface BulkStudentData {
+	name: string;
+	email: string;
+	dateOfBirth: string;
+	classId: string;
+	campusIds: string[];
+	primaryCampusId: string;
+	status: Status;
 }
 
 export const BulkStudentUpload = () => {
+	const [isOpen, setIsOpen] = useState(false);
 	const [file, setFile] = useState<File | null>(null);
-	const [isUploading, setIsUploading] = useState(false);
+	const [uploadProgress, setUploadProgress] = useState(0);
+	const [selectedCampus, setSelectedCampus] = useState<string>('');
+	const { toast } = useToast();
 
-	const utils = api.useContext();
+	const { data: campuses } = api.campus.getAll.useQuery();
+	const { data: classes } = api.class.getAll.useQuery(
+		{ campusId: selectedCampus },
+		{ enabled: !!selectedCampus }
+	);
 
-	const uploadMutation = api.student.bulkUpload.useMutation({
-		onSuccess: (result: UploadResult) => {
-			toast.success(`Successfully uploaded ${result.successful} students`);
-			if (result.failed > 0) {
-				toast.error(`Failed to upload ${result.failed} students`, {
-					description: (
-						<div className="mt-2">
-							<p className="font-semibold">Errors:</p>
-							<ul className="list-disc pl-4">
-								{result.errors.slice(0, 3).map((error, index) => (
-									<li key={index}>{error}</li>
-								))}
-								{result.errors.length > 3 && (
-									<li>...and {result.errors.length - 3} more errors</li>
-								)}
-							</ul>
-						</div>
-					),
-					duration: 5000,
-				});
-			}
+	const bulkCreateMutation = api.student.bulkCreate.useMutation({
+		onSuccess: () => {
+			toast({
+				title: 'Success',
+				description: 'Students have been created successfully',
+			});
+			setIsOpen(false);
 			setFile(null);
-			setIsUploading(false);
-			utils.student.searchStudents.invalidate();
+			setUploadProgress(0);
 		},
 		onError: (error) => {
-			toast.error(error.message || "Failed to upload students");
-			setIsUploading(false);
-		}
+			toast({
+				title: 'Error',
+				description: error.message,
+				variant: 'destructive',
+			});
+		},
 	});
 
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const selectedFile = e.target.files?.[0];
+	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+		const selectedFile = event.target.files?.[0];
 		if (selectedFile) {
-			if (!selectedFile.name.match(/\.(csv|xlsx|xls)$/i)) {
-				toast.error("Please upload a CSV or Excel file");
+			if (selectedFile.type !== 'text/csv') {
+				toast({
+					title: 'Invalid file type',
+					description: 'Please upload a CSV file',
+					variant: 'destructive',
+				});
 				return;
 			}
 			setFile(selectedFile);
 		}
 	};
 
+	const processCSV = async (file: File): Promise<BulkStudentData[]> => {
+		return new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = async (event) => {
+				try {
+					const text = event.target?.result as string;
+					const rows = text.split('\n');
+					const headers = rows[0].split(',');
+					
+					const students = rows.slice(1).map((row) => {
+						const values = row.split(',');
+						const student: BulkStudentData = {
+							name: values[headers.indexOf('name')].trim(),
+							email: values[headers.indexOf('email')].trim(),
+							dateOfBirth: values[headers.indexOf('dateOfBirth')].trim(),
+							classId: values[headers.indexOf('classId')].trim(),
+							campusIds: [selectedCampus],
+							primaryCampusId: selectedCampus,
+							status: Status.ACTIVE,
+						};
+						return student;
+					});
+
+					resolve(students.filter(s => s.name && s.email));
+				} catch (error) {
+					reject(new Error('Error processing CSV file'));
+				}
+			};
+			reader.onerror = () => reject(new Error('Error reading file'));
+			reader.readAsText(file);
+		});
+	};
+
 	const handleUpload = async () => {
-		if (!file) return;
-		
-		setIsUploading(true);
-		const formData = new FormData();
-		formData.append("file", file);
-		
-		uploadMutation.mutate(formData);
+		if (!file || !selectedCampus) return;
+
+		try {
+			setUploadProgress(10);
+			const students = await processCSV(file);
+			setUploadProgress(30);
+
+			// Split into chunks of 100 students
+			const chunkSize = 100;
+			const chunks = [];
+			for (let i = 0; i < students.length; i += chunkSize) {
+				chunks.push(students.slice(i, i + chunkSize));
+			}
+
+			// Process each chunk
+			let processed = 0;
+			for (const chunk of chunks) {
+				await bulkCreateMutation.mutateAsync(chunk);
+				processed += chunk.length;
+				setUploadProgress(30 + (70 * processed) / students.length);
+			}
+
+			toast({
+				title: 'Success',
+				description: `Successfully processed ${students.length} students`,
+			});
+		} catch (error) {
+			toast({
+				title: 'Error',
+				description: error instanceof Error ? error.message : 'An error occurred while processing the file',
+				variant: 'destructive',
+			});
+		} finally {
+			setUploadProgress(100);
+			setTimeout(() => setUploadProgress(0), 1000);
+		}
+	};
+
+	const downloadTemplate = () => {
+		const headers = ['name', 'email', 'dateOfBirth', 'classId'];
+		const csvContent = [
+			headers.join(','),
+			'John Doe,john.doe@example.com,2000-01-01,class_id_here',
+		].join('\n');
+
+		const blob = new Blob([csvContent], { type: 'text/csv' });
+		const url = window.URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = 'student_template.csv';
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		window.URL.revokeObjectURL(url);
 	};
 
 	return (
-		<div className="flex items-center gap-4">
-			<Input
-				type="file"
-				accept=".csv,.xlsx,.xls"
-				onChange={handleFileChange}
-				className="max-w-xs"
-				disabled={isUploading}
-			/>
-			<Button 
-				onClick={handleUpload}
-				disabled={!file || isUploading}
-			>
-				{isUploading ? "Uploading..." : "Upload"}
-			</Button>
-			<TooltipProvider>
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<InfoCircledIcon className="h-5 w-5 text-muted-foreground cursor-help" />
-					</TooltipTrigger>
-					<TooltipContent className="max-w-sm">
-						<p className="font-semibold mb-2">File Format Instructions:</p>
-						<ul className="list-disc pl-4 space-y-1">
-							<li>Upload CSV or Excel file (.csv, .xlsx, .xls)</li>
-							<li>Required columns: Name, Email, Date of Birth (YYYY-MM-DD)</li>
-							<li>Optional columns: Class ID, Parent Email</li>
-							<li>First row should be column headers</li>
-							<li>Maximum 500 students per upload</li>
-						</ul>
-					</TooltipContent>
-				</Tooltip>
-			</TooltipProvider>
-		</div>
+		<Dialog open={isOpen} onOpenChange={setIsOpen}>
+			<DialogTrigger asChild>
+				<Button variant="outline">Bulk Upload</Button>
+			</DialogTrigger>
+			<DialogContent className="max-w-2xl">
+				<DialogHeader>
+					<DialogTitle>Bulk Student Upload</DialogTitle>
+				</DialogHeader>
+
+				<Card>
+					<CardHeader>
+						<CardTitle>Upload Students</CardTitle>
+						<CardDescription>
+							Upload a CSV file containing student information. Download the template below for the correct format.
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="space-y-4">
+						<div className="space-y-2">
+							<Label>Select Campus</Label>
+							<Select
+								value={selectedCampus}
+								onValueChange={setSelectedCampus}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder="Select a campus" />
+								</SelectTrigger>
+								<SelectContent>
+									{campuses?.map((campus) => (
+										<SelectItem key={campus.id} value={campus.id}>
+											{campus.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+
+						<div className="space-y-2">
+							<Label htmlFor="file">Upload CSV File</Label>
+							<Input
+								id="file"
+								type="file"
+								accept=".csv"
+								onChange={handleFileChange}
+								disabled={!selectedCampus}
+							/>
+						</div>
+
+						{uploadProgress > 0 && (
+							<Progress value={uploadProgress} className="w-full" />
+						)}
+
+						<div className="flex justify-between">
+							<Button
+								variant="outline"
+								onClick={downloadTemplate}
+								size="sm"
+							>
+								<Download className="mr-2 h-4 w-4" />
+								Download Template
+							</Button>
+
+							<Button
+								onClick={handleUpload}
+								disabled={!file || !selectedCampus}
+								size="sm"
+							>
+								<Upload className="mr-2 h-4 w-4" />
+								Upload Students
+							</Button>
+						</div>
+
+						<Alert>
+							<AlertTitle>Note</AlertTitle>
+							<AlertDescription>
+								The CSV file should contain the following columns: name, email, dateOfBirth (YYYY-MM-DD), and classId.
+								All students will be assigned to the selected campus.
+							</AlertDescription>
+						</Alert>
+					</CardContent>
+				</Card>
+			</DialogContent>
+		</Dialog>
 	);
 };
