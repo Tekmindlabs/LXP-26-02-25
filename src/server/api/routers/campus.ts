@@ -329,51 +329,53 @@ export const campusRouter = createTRPCRouter({
       });
     }),
 
-  getTeachers: protectedProcedure
+    getTeachers: protectedProcedure
     .input(z.object({
       campusId: z.string(),
       status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
       search: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const where: Prisma.TeacherProfileWhereInput = {
-        classes: {
-          some: {
-            class: {
-              campus: {
-                id: input.campusId,
+      // Find teachers who are assigned to classes in this campus
+      return ctx.prisma.user.findMany({
+        where: {
+          userType: 'TEACHER',
+          teacherProfile: {
+            // Use the classes relation instead of campuses
+            classes: {
+              some: {
+                class: {
+                  campusId: input.campusId,
+                },
+                status: input.status || 'ACTIVE',
+              },
+            },
+          },
+          ...(input.search && {
+            OR: [
+              { name: { contains: input.search, mode: "insensitive" } },
+              { email: { contains: input.search, mode: "insensitive" } },
+            ],
+          }),
+        },
+        include: {
+          teacherProfile: {
+            include: {
+              subjects: {
+                include: {
+                  subject: true,
+                },
+              },
+              classes: {
+                include: {
+                  class: true,
+                },
               },
             },
           },
         },
-        ...(input.status && { status: input.status }),
-        ...(input.search && {
-          OR: [
-            { user: { name: { contains: input.search, mode: "insensitive" } } },
-            { user: { email: { contains: input.search, mode: "insensitive" } } },
-          ],
-        }),
-      };
-
-      return ctx.prisma.teacherProfile.findMany({
-        where,
-        include: {
-          user: true,
-          classes: {
-            include: {
-              class: true,
-            },
-          },
-          subjects: {
-            include: {
-              subject: true,
-            },
-          },
-        },
         orderBy: {
-          user: {
-            name: "asc",
-          },
+          name: 'asc',
         },
       });
     }),
