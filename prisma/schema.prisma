@@ -29,7 +29,6 @@ model User {
   userRoles UserRole[]
 
   // Profile Relations
-  studentProfile       StudentProfile?
   teacherProfile       TeacherProfile?
   coordinatorProfile   CoordinatorProfile?
   parentProfile        ParentProfile?
@@ -49,13 +48,13 @@ model User {
   activityLogs ActivityLog[]
 
   // Historical Data Relations
-
   historicalRecords HistoricalStudentRecord[] @relation("StudentHistory")
   versionedRecords  VersionedRecord[]         @relation("UserVersions")
   CampusRole        CampusRole[]
 
-
   auditLogs AuditLog[]
+  
+  student    Student?
   
   @@map("users")
 }
@@ -474,7 +473,7 @@ model Subject {
   unifiedActivities  Activity[]          @relation("UnifiedActivitySubjects")
   progress           ProgressTracking[]
 
-  attendance      Attendance[]
+  attendance      Attendance[] @relation("SubjectAttendance")
   gradeRecords    SubjectGradeRecord[]
   subjectConfig   SubjectConfig?
   curriculumNodes CurriculumNode[]
@@ -524,61 +523,38 @@ model ProgressTracking {
 }
 
 model Class {
-  id                 String                       @id @default(cuid())
-  name               String
-  classGroupId       String
-  classGroup         ClassGroup                   @relation(fields: [classGroupId], references: [id])
-  campusId           String
-  campus             Campus                       @relation(fields: [campusId], references: [id])
-  buildingId         String?
-  building           Building?                    @relation(fields: [buildingId], references: [id])
-  roomId             String?
-  room               Room?                        @relation(fields: [roomId], references: [id])
-  capacity           Int                          @default(30)
-  gradeBook          GradeBook?
-  termStructureId    String?
-  termStructure      ProgramTermStructure?        @relation(fields: [termStructureId], references: [id])
-  status             Status                       @default(ACTIVE)
-  students           StudentProfile[]
-  teachers           TeacherClass[]
-  classActivities    ClassActivity[]
-  unifiedActivities  Activity[]                   @relation("UnifiedActivityClasses")
-  classInheritance   ClassActivityInheritance[]
-  unifiedInheritance UnifiedActivityInheritance[]
-  timetables         Timetable[]
-  attendance         Attendance[]
-  createdAt          DateTime                     @default(now())
-  updatedAt          DateTime                     @updatedAt
+  id                String    @id @default(cuid())
+  name              String
+  code              String    @unique
+  capacity          Int       @default(30)
+  status            Status    @default(ACTIVE)
+  buildingId        String?
+  building          Building? @relation(fields: [buildingId], references: [id])
+  roomId            String?
+  room              Room?     @relation(fields: [roomId], references: [id])
+  classGroupId      String
+  classGroup        ClassGroup @relation(fields: [classGroupId], references: [id])
+  campusId          String
+  campus            Campus     @relation(fields: [campusId], references: [id])
+  students          Student[]  // Add relation back to Student
+  teachers          TeacherClass[]
+  activities        ClassActivity[]
+  attendance        Attendance[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  @@unique([name, classGroupId])
+  activityInheritance ClassActivityInheritance[]
+  unifiedActivities   Activity[] @relation("UnifiedActivityClasses")
+  unifiedInheritance  UnifiedActivityInheritance[]
+  gradeBook          GradeBook?
+  timetable          Timetable?
+  termStructure      ProgramTermStructure? @relation(fields: [termStructureId], references: [id])
+  termStructureId    String?
+
   @@map("classes")
 }
 
 // Profile Models
-model StudentProfile {
-  id          String         @id @default(cuid())
-  user        User           @relation(fields: [userId], references: [id])
-  userId      String         @unique
-  dateOfBirth DateTime?
-  class       Class?         @relation(fields: [classId], references: [id])
-  classId     String?
-  attendance  Attendance[]
-  parent      ParentProfile? @relation(fields: [parentId], references: [id])
-  parentId    String?
-
-  // Activity submissions
-  classActivitySubmissions   ClassActivitySubmission[]
-  unifiedActivitySubmissions UnifiedActivitySubmission[]
-
-  // Add coordinator relation
-  coordinators CoordinatorProfile[] @relation("CoordinatorStudents")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("student_profiles")
-}
-
 model TeacherProfile {
   id             String           @id @default(cuid())
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -645,7 +621,7 @@ model CoordinatorProfile {
   subordinates      CoordinatorProfile[] @relation("CoordinatorHierarchy")
   
   // Add direct access to students through programs
-  students          StudentProfile[]     @relation("CoordinatorStudents")
+  students          Student[]     @relation("CoordinatorStudents")
   
   // Add workload tracking
   maxWorkload       Int                  @default(5) // Maximum number of programs
@@ -681,37 +657,37 @@ enum CoordinatorType {
 }
 
 model ParentProfile {
-  id        String           @id @default(cuid())
-  user      User             @relation(fields: [userId], references: [id])
-  userId    String           @unique
-  children  StudentProfile[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  students  Student[]
+  
   @@map("parent_profiles")
 }
 
 // Attendance Models
 
 model Attendance {
-  id        String            @id @default(cuid())
-  student   StudentProfile    @relation(fields: [studentId], references: [id])
-  studentId String
-  class     Class             @relation(fields: [classId], references: [id])
-  classId   String
-  subject   Subject?          @relation(fields: [subjectId], references: [id])
-  subjectId String?
-  date      DateTime
-  status    AttendanceStatus
-  notes     String?
-  audits    AttendanceAudit[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  id          String   @id @default(cuid())
+  date        DateTime
+  status      AttendanceStatus
+  remarks     String?
+  classId     String
+  class       Class    @relation(fields: [classId], references: [id])
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id]) // Add relation back to Student
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  auditLogs   AttendanceAudit[]
 
-  @@unique([studentId, date, subjectId])
+  subject         Subject?    @relation("SubjectAttendance", fields: [subjectId], references: [id])
+  subjectId       String?
+
+  @@unique([date, classId, studentId])
   @@index([classId])
-  @@index([subjectId])
-  @@index([date])
+  @@index([studentId])
   @@map("attendance")
 }
 
@@ -754,7 +730,7 @@ model ClassActivity {
   // Configuration and resources
   configuration Json
   resources     ClassActivityResource[]    @relation("ClassActivityResources")
-  submissions   ClassActivitySubmission[]  @relation("ClassActivitySubmissions")
+  submissions   ClassActivitySubmission[]  @relation("ActivitySubmissions")
   inheritedBy   ClassActivityInheritance[] @relation("ClassActivityInheritance")
 
   createdAt DateTime @default(now())
@@ -840,7 +816,7 @@ model UnifiedActivitySubmission {
   id          String           @id @default(cuid())
   activity    Activity         @relation("UnifiedActivitySubmissions", fields: [activityId], references: [id])
   activityId  String
-  student     StudentProfile   @relation(fields: [studentId], references: [id])
+  student     Student          @relation(fields: [studentId], references: [id])
   studentId   String
   status      SubmissionStatus
   content     Json?
@@ -875,17 +851,22 @@ model ClassActivityResource {
 }
 
 model ClassActivitySubmission {
-  id          String           @id @default(cuid())
-  activity    ClassActivity    @relation("ClassActivitySubmissions", fields: [activityId], references: [id])
-  activityId  String
-  student     StudentProfile   @relation(fields: [studentId], references: [id])
-  studentId   String
-  status      SubmissionStatus
-  content     Json?
-  submittedAt DateTime         @default(now())
+  id              String   @id @default(cuid())
+  activityId      String
+  activity        ClassActivity @relation("ActivitySubmissions", fields: [activityId], references: [id])
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id])
+  status          SubmissionStatus @default(PENDING)
+  submittedAt     DateTime?
+  obtainedMarks   Float?
+  feedback        String?
+  resources       Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@index([activityId])
+  @@unique([activityId, studentId])
   @@index([studentId])
+  @@map("class_activity_submissions")
 }
 
 // Assessment and Grading Models
@@ -1940,23 +1921,41 @@ model TeacherCampus {
 }
 
 model StudentCampus {
-  id          String   @id @default(cuid())
-  studentId   String
-  campusId    String
-  isPrimary   Boolean  @default(false)
-  status      Status   @default(ACTIVE)
-  joinedAt    DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  student     Student  @relation(fields: [studentId], references: [id])
-  campus      Campus   @relation(fields: [campusId], references: [id])
+  id            String    @id @default(cuid())
+  studentId     String
+  campusId      String
+  isPrimary     Boolean   @default(false)
+  status        Status    @default(ACTIVE)
+  joinedAt      DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  student       Student   @relation(fields: [studentId], references: [id])
+  campus        Campus    @relation(fields: [campusId], references: [id])
 
   @@unique([studentId, campusId])
   @@index([studentId])
   @@index([campusId])
+  @@map("student_campus")
 }
 
 model Student {
-  // ... existing code ...
-  campuses    StudentCampus[]
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id])
+  enrollmentNumber String?
+  currentGrade    String?
+  dateOfBirth     DateTime?
+  classId         String?
+  class           Class?    @relation(fields: [classId], references: [id])
+  parentId        String?
+  parent          ParentProfile? @relation(fields: [parentId], references: [id])
+  campuses        StudentCampus[]
+  attendance      Attendance[]
+  activities      ClassActivitySubmission[]
+  unifiedActivities UnifiedActivitySubmission[]
+  coordinators    CoordinatorProfile[] @relation("CoordinatorStudents")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("students")
 }
