@@ -153,7 +153,7 @@ export class CampusReportingService {
 		try {
 			const teachers = await this.db.teacherProfile.findMany({
 				where: { 
-					campuses: {
+					TeacherCampus: {
 						some: {
 							campusId: campusId,
 							status: "ACTIVE"
