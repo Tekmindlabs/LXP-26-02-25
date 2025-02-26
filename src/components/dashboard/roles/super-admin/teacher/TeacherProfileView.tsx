@@ -10,6 +10,9 @@ import { format } from "date-fns";
 import { PeriodDialog } from "../timetable/PeriodDialog";
 import { ScheduleView } from "../timetable/ScheduleView";
 import { TeacherAnalyticsSection } from "./analytics/TeacherAnalyticsSection";
+import { Badge } from "@/components/ui/badge";
+import { Star } from "lucide-react";
+import TeacherCampusAssignment from "./TeacherCampusAssignment";
 import type { Period, ClassActivity } from "@prisma/client";
 import type { RouterOutputs } from "@/utils/api";
 
@@ -17,7 +20,8 @@ const TabSections = {
 	PROFILE: 'profile',
 	SCHEDULE: 'schedule',
 	ASSIGNMENTS: 'assignments',
-	ANALYTICS: 'analytics'
+	ANALYTICS: 'analytics',
+	CAMPUSES: 'campuses'
 } as const;
 
 type TabSection = typeof TabSections[keyof typeof TabSections];
@@ -56,9 +60,15 @@ export default function TeacherProfileView({ teacherId }: TeacherProfileViewProp
 			}
 		})
 	});
+
+	const { data: teacherCampuses = [], isLoading: isLoadingCampuses } = api.teacher.getTeacherCampuses.useQuery(
+		{ teacherId },
+		{ enabled: !!teacherId }
+	);
+
 	const utils = api.useContext();
 
-	if (isLoading) return <div>Loading...</div>;
+	if (isLoading || isLoadingCampuses) return <div>Loading...</div>;
 	if (!teacher?.teacherProfile) return <div>Teacher not found</div>;
 
 	const timetableId = teacher.teacherProfile.classes[0]?.class.timetable?.id;
@@ -101,6 +111,7 @@ export default function TeacherProfileView({ teacherId }: TeacherProfileViewProp
 					<TabsTrigger value={TabSections.SCHEDULE}>Schedule</TabsTrigger>
 					<TabsTrigger value={TabSections.ASSIGNMENTS}>Assignments</TabsTrigger>
 					<TabsTrigger value={TabSections.ANALYTICS}>Analytics</TabsTrigger>
+					<TabsTrigger value={TabSections.CAMPUSES}>Campuses</TabsTrigger>
 				</TabsList>
 
 				<TabsContent value={TabSections.PROFILE}>
@@ -121,6 +132,29 @@ export default function TeacherProfileView({ teacherId }: TeacherProfileViewProp
 								<div>
 									<h3 className="font-semibold">Specialization</h3>
 									<p>{teacher.teacherProfile.specialization || 'Not specified'}</p>
+								</div>
+								<div>
+									<h3 className="font-semibold">Assigned Campuses</h3>
+									<div className="space-y-2 mt-2">
+										{teacherCampuses.length > 0 ? (
+											teacherCampuses.map((campus) => (
+												<div key={campus.campusId} className="flex items-center gap-2">
+													<Badge variant={campus.status === "ACTIVE" ? "default" : "secondary"}>
+														{campus.status}
+													</Badge>
+													<span>{campus.campus.name}</span>
+													{campus.isPrimary && (
+														<Badge variant="outline" className="bg-yellow-100">
+															<Star className="mr-1 h-3 w-3 text-yellow-500" />
+															Primary
+														</Badge>
+													)}
+												</div>
+											))
+										) : (
+											<p className="text-muted-foreground">No campuses assigned</p>
+										)}
+									</div>
 								</div>
 								<div>
 									<h3 className="font-semibold">Assigned Classes</h3>
@@ -198,10 +232,15 @@ export default function TeacherProfileView({ teacherId }: TeacherProfileViewProp
 						</CardContent>
 					</Card>
 				</TabsContent>
-			<TabsContent value={TabSections.ANALYTICS}>
-				<TeacherAnalyticsSection teacherId={teacherId} />
-			</TabsContent>
-		</Tabs>
+
+				<TabsContent value={TabSections.ANALYTICS}>
+					<TeacherAnalyticsSection teacherId={teacherId} />
+				</TabsContent>
+
+				<TabsContent value={TabSections.CAMPUSES}>
+					<TeacherCampusAssignment teacherId={teacherId} />
+				</TabsContent>
+			</Tabs>
 
 			{isDialogOpen && timetableId && (
 				<PeriodDialog

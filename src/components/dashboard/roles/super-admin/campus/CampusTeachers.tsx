@@ -109,7 +109,6 @@ const CampusTeachers: FC<CampusTeachersProps> = ({ campusId }) => {
                           <span className="font-medium">Email: </span>
                           {teacher.user.email}
                         </div>
-
                         <div>
                           <span className="font-medium">Teaching Assignments: </span>
                           <div className="mt-2 space-y-2">
@@ -147,4 +146,3 @@ const CampusTeachers: FC<CampusTeachersProps> = ({ campusId }) => {
 };
 
 export default CampusTeachers;
-
