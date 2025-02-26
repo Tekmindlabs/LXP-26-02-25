@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { DashboardContent } from '@/components/dashboard/DashboardContent';
 import { Card } from '@/components/ui/card';
@@ -10,54 +10,35 @@ import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Status } from '@prisma/client';
-import { Input } from '@/components/ui/input';
 
-interface Teacher {
+interface Program {
   id: string;
   name: string;
-  email: string;
+  description: string | null;
   status: Status;
-  isPrimary: boolean;
-  teacherProfile: {
-    specialization: string | null;
-    teacherType: string | null;
-  };
-  classCount: number;
-  subjectCount: number;
+  classGroupCount: number;
 }
 
-export default function TeachersPage({
+export default function ProgramsPage({
   params,
 }: {
   params: { id: string; role: string };
 }) {
   const router = useRouter();
-  const { data: teachers, isLoading } = api.campus.getTeachers.useQuery({ campusId: params.id });
+  const { data: programs, isLoading } = api.campus.getPrograms.useQuery({ campusId: params.id });
 
-  const columns: ColumnDef<Teacher>[] = [
+  const columns: ColumnDef<Program>[] = [
     {
       accessorKey: 'name',
       header: 'Name',
     },
     {
-      accessorKey: 'email',
-      header: 'Email',
+      accessorKey: 'description',
+      header: 'Description',
     },
     {
-      accessorKey: 'teacherProfile.specialization',
-      header: 'Specialization',
-    },
-    {
-      accessorKey: 'teacherProfile.teacherType',
-      header: 'Type',
-    },
-    {
-      accessorKey: 'classCount',
-      header: 'Classes',
-    },
-    {
-      accessorKey: 'subjectCount',
-      header: 'Subjects',
+      accessorKey: 'classGroupCount',
+      header: 'Class Groups',
     },
     {
       accessorKey: 'status',
@@ -75,16 +56,16 @@ export default function TeachersPage({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/teachers/${row.original.id}/edit`)}
+            onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/programs/${row.original.id}/edit`)}
           >
             Edit
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/teachers/${row.original.id}/assignments`)}
+            onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/programs/${row.original.id}/class-groups`)}
           >
-            View Assignments
+            View Class Groups
           </Button>
         </div>
       ),
@@ -95,27 +76,20 @@ export default function TeachersPage({
     <DashboardContent>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-bold tracking-tight">Teachers</h2>
-          <Button onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/teachers/new`)}>
-            <Plus className="mr-2 h-4 w-4" /> Add Teacher
+          <h2 className="text-3xl font-bold tracking-tight">Programs</h2>
+          <Button onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/programs/new`)}>
+            <Plus className="mr-2 h-4 w-4" /> Add Program
           </Button>
         </div>
 
         <Card className="p-6">
-          <div className="mb-6">
-            <Input
-              placeholder="Search teachers..."
-              className="max-w-sm"
-            />
-          </div>
-
           <DataTable
             columns={columns}
-            data={teachers || []}
+            data={programs || []}
             isLoading={isLoading}
           />
         </Card>
       </div>
     </DashboardContent>
   );
-}
+} 
