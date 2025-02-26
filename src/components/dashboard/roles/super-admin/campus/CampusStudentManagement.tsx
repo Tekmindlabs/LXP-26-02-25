@@ -23,6 +23,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import { Plus } from 'lucide-react';
 
 interface CampusStudentManagementProps {
   campusId: string;
@@ -46,31 +48,38 @@ interface Student {
   }[];
 }
 
-export const CampusStudentManagement = ({ campusId }: CampusStudentManagementProps) => {
-  const [filters, setFilters] = useState({
-    search: '',
-    classId: '',
-    status: '',
-  });
-
+export function CampusStudentManagement({ campusId }: CampusStudentManagementProps) {
   const router = useRouter();
-  const { toast } = useToast();
-  const utils = api.useContext();
+  const [search, setSearch] = useState('');
+  const [classId, setClassId] = useState('');
+  const [status, setStatus] = useState<Status | ''>('');
 
-  const { data: students } = api.student.searchStudents.useQuery({
-    campusId,
-    ...filters,
-  });
+  const { data: students, isLoading } = api.student.getCampusStudents.useQuery(
+    {
+      campusId,
+      filters: {
+        search,
+        classId: classId || undefined,
+        status: status || undefined,
+      },
+    },
+    {
+      enabled: !!campusId,
+    }
+  );
 
-  const { data: classes } = api.class.getAll.useQuery({ campusId });
+  const { data: classes } = api.class.searchClasses.useQuery(
+    { campusId },
+    { enabled: !!campusId }
+  );
 
-  const deleteStudent = api.student.delete.useMutation({
+  const deleteMutation = api.student.delete.useMutation({
     onSuccess: () => {
       toast({
         title: 'Success',
         description: 'Student deleted successfully',
       });
-      utils.student.searchStudents.invalidate();
+      router.refresh();
     },
     onError: (error) => {
       toast({
@@ -91,61 +100,47 @@ export const CampusStudentManagement = ({ campusId }: CampusStudentManagementPro
       header: 'Email',
     },
     {
-      accessorKey: 'class',
+      accessorKey: 'class.name',
       header: 'Class',
-      cell: ({ row }) => {
-        const cls = row.original.class;
-        return cls ? `${cls.name} (${cls.classGroup.name})` : '-';
-      },
     },
     {
       accessorKey: 'status',
       header: 'Status',
-      cell: ({ row }) => (
-        <Badge variant={row.original.status === 'ACTIVE' ? 'default' : 'secondary'}>
-          {row.original.status}
-        </Badge>
-      ),
     },
     {
       id: 'actions',
       cell: ({ row }) => {
         const student = row.original;
         return (
-          <div className="flex items-center gap-2">
-            <StudentTransfer
-              studentId={student.id}
-              currentCampuses={student.campuses}
-            />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <span className="sr-only">Open menu</span>
-                  <MoreHorizontal className="h-4 w-4" />
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/dashboard/campus/${campusId}/students/${student.id}/edit`)}
+            >
+              Edit
+            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Transfer
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={() => router.push(`/dashboard/super-admin/student/${student.id}/edit`)}
-                >
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive"
-                  onClick={() => {
-                    if (window.confirm('Are you sure you want to delete this student?')) {
-                      deleteStudent.mutate({ id: student.id });
-                    }
-                  }}
-                >
-                  <Trash className="mr-2 h-4 w-4" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </DialogTrigger>
+              <DialogContent>
+                <StudentTransfer studentId={student.id} currentCampuses={[campusId]} />
+              </DialogContent>
+            </Dialog>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (confirm('Are you sure you want to delete this student?')) {
+                  deleteMutation.mutate({ id: student.id });
+                }
+              }}
+            >
+              Delete
+            </Button>
           </div>
         );
       },
@@ -153,64 +148,66 @@ export const CampusStudentManagement = ({ campusId }: CampusStudentManagementPro
   ];
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Students</CardTitle>
-        <div className="flex items-center gap-4">
-          <BulkStudentUpload />
-          <Button onClick={() => router.push(`/dashboard/super-admin/student/create?campusId=${campusId}`)}>
+    <Card className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold">Students</h2>
+        <div className="flex gap-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Bulk Upload
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <BulkStudentUpload campusId={campusId} />
+            </DialogContent>
+          </Dialog>
+          <Button onClick={() => router.push(`/dashboard/campus/${campusId}/students/new`)}>
+            <Plus className="w-4 h-4 mr-2" />
             Add Student
           </Button>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="mb-6 flex items-center gap-4">
-          <Input
-            placeholder="Search students..."
-            value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-            className="max-w-sm"
-          />
-          <Select
-            value={filters.classId}
-            onValueChange={(value) => setFilters({ ...filters, classId: value })}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by Class" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">All Classes</SelectItem>
-              {classes?.map((cls) => (
-                <SelectItem key={cls.id} value={cls.id}>
-                  {cls.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={filters.status}
-            onValueChange={(value) => setFilters({ ...filters, status: value })}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">All Status</SelectItem>
-              {Object.values(Status).map((status) => (
-                <SelectItem key={status} value={status}>
-                  {status}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      </div>
 
-        <DataTable
-          columns={columns}
-          data={students || []}
-          pagination
+      <div className="flex gap-4 mb-6">
+        <Input
+          placeholder="Search students..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-sm"
         />
-      </CardContent>
+        <Select value={classId} onValueChange={setClassId}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by class" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Classes</SelectItem>
+            {classes?.map((cls) => (
+              <SelectItem key={cls.id} value={cls.id}>
+                {cls.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={status} onValueChange={(value) => setStatus(value as Status | '')}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Status</SelectItem>
+            <SelectItem value="ACTIVE">Active</SelectItem>
+            <SelectItem value="INACTIVE">Inactive</SelectItem>
+            <SelectItem value="PENDING">Pending</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={students || []}
+        isLoading={isLoading}
+      />
     </Card>
   );
-}; 
+} 
