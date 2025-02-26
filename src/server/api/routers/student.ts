@@ -5,6 +5,7 @@ import { generatePassword } from "../../../utils/password";
 import * as XLSX from 'xlsx';
 import { CampusStudentService } from "../../services/CampusStudentService";
 import { CampusUserService } from "../../services/CampusUserService";
+import { TRPCError } from "@trpc/server";
 
 interface StudentActivity {
 	status: string;
@@ -27,6 +28,16 @@ interface ExcelRow {
 	DateOfBirth: string;
 	ClassId?: string;
 	ParentEmail?: string;
+}
+
+interface ActivitySubmission {
+	status: string;
+	obtainedMarks?: number;
+	totalMarks?: number;
+	activity: {
+		subjectId: string;
+		type: string;
+	};
 }
 
 const studentDataSchema = z.object({
@@ -473,12 +484,12 @@ export const studentRouter = createTRPCRouter({
 			}
 
 			// Get activities and attendance separately
-			const activities = await ctx.prisma.activitySubmission.findMany({
+			const activities = await ctx.prisma.classActivitySubmission.findMany({
 				where: { studentId: input },
 				include: {
 					activity: true,
 				},
-			});
+			}) as ActivitySubmission[];
 
 			const attendance = await ctx.prisma.attendance.findMany({
 				where: { studentId: student.id },
@@ -489,9 +500,12 @@ export const studentRouter = createTRPCRouter({
 			// Activity performance
 			const activityMetrics = {
 				total: activities.length,
-				completed: activities.filter(a => a.status === 'SUBMITTED' || a.status === 'GRADED').length,
-				graded: activities.filter(a => a.status === 'GRADED').length,
-				averageGrade: activities.reduce((acc, curr) => acc + (curr.obtainedMarks || 0), 0) / activities.length || 0,
+				completed: activities.filter((a: ActivitySubmission) => 
+					a.status === 'SUBMITTED' || a.status === 'GRADED').length,
+				graded: activities.filter((a: ActivitySubmission) => 
+					a.status === 'GRADED').length,
+				averageGrade: activities.reduce((acc: number, curr: ActivitySubmission) => 
+					acc + (curr.obtainedMarks || 0), 0) / activities.length || 0,
 			};
 
 			// Attendance metrics
@@ -506,7 +520,7 @@ export const studentRouter = createTRPCRouter({
 
 			// Subject-wise performance
 			const subjectPerformance = subjects.map((subject: Subject) => {
-				const subjectActivities = activities.filter(a => 
+				const subjectActivities = activities.filter((a: ActivitySubmission) => 
 					a.activity.subjectId === subject.id && 
 					a.activity.type === 'CLASS_EXAM'
 				);
@@ -514,7 +528,8 @@ export const studentRouter = createTRPCRouter({
 				return {
 					subject: subject.name,
 					activities: subjectActivities.length,
-					averageGrade: subjectActivities.reduce((acc, curr) => acc + (curr.obtainedMarks || 0), 0) / subjectActivities.length || 0,
+					averageGrade: subjectActivities.reduce((acc: number, curr: ActivitySubmission) => 
+						acc + (curr.obtainedMarks || 0), 0) / subjectActivities.length || 0,
 				};
 			});
 
@@ -674,6 +689,13 @@ export const studentRouter = createTRPCRouter({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
+			if (!ctx.session?.user?.id) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You must be logged in to perform this action",
+				});
+			}
+
 			const campusStudentService = new CampusStudentService(
 				ctx.prisma,
 				new CampusUserService(ctx.prisma)
@@ -695,6 +717,13 @@ export const studentRouter = createTRPCRouter({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
+			if (!ctx.session?.user?.id) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You must be logged in to perform this action",
+				});
+			}
+
 			const campusStudentService = new CampusStudentService(
 				ctx.prisma,
 				new CampusUserService(ctx.prisma)
@@ -715,6 +744,13 @@ export const studentRouter = createTRPCRouter({
 			})
 		)
 		.query(async ({ ctx, input }) => {
+			if (!ctx.session?.user?.id) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You must be logged in to perform this action",
+				});
+			}
+
 			const campusStudentService = new CampusStudentService(
 				ctx.prisma,
 				new CampusUserService(ctx.prisma)
@@ -735,6 +771,13 @@ export const studentRouter = createTRPCRouter({
 			})
 		)
 		.query(async ({ ctx, input }) => {
+			if (!ctx.session?.user?.id) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You must be logged in to perform this action",
+				});
+			}
+
 			const campusStudentService = new CampusStudentService(
 				ctx.prisma,
 				new CampusUserService(ctx.prisma)
@@ -756,6 +799,13 @@ export const studentRouter = createTRPCRouter({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
+			if (!ctx.session?.user?.id) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You must be logged in to perform this action",
+				});
+			}
+
 			const campusStudentService = new CampusStudentService(
 				ctx.prisma,
 				new CampusUserService(ctx.prisma)
@@ -777,6 +827,13 @@ export const studentRouter = createTRPCRouter({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
+			if (!ctx.session?.user?.id) {
+				throw new TRPCError({
+					code: "UNAUTHORIZED",
+					message: "You must be logged in to perform this action",
+				});
+			}
+
 			const campusStudentService = new CampusStudentService(
 				ctx.prisma,
 				new CampusUserService(ctx.prisma)

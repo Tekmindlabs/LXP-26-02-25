@@ -31,13 +31,13 @@ export const BulkStudentUpload = () => {
 	const [selectedCampus, setSelectedCampus] = useState<string>('');
 	const { toast } = useToast();
 
-	const { data: campuses } = api.campus.getAll.useQuery();
-	const { data: classes } = api.class.getAll.useQuery(
+	const { data: campuses } = api.campus.list.useQuery();
+	const { data: classes } = api.class.searchClasses.useQuery(
 		{ campusId: selectedCampus },
 		{ enabled: !!selectedCampus }
 	);
 
-	const bulkCreateMutation = api.student.bulkCreate.useMutation({
+	const bulkCreateMutation = api.student.bulkUpload.useMutation({
 		onSuccess: () => {
 			toast({
 				title: 'Success',
@@ -47,7 +47,7 @@ export const BulkStudentUpload = () => {
 			setFile(null);
 			setUploadProgress(0);
 		},
-		onError: (error) => {
+		onError: (error: { message: string }) => {
 			toast({
 				title: 'Error',
 				description: error.message,
