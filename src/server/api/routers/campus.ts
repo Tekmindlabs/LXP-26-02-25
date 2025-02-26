@@ -594,10 +594,9 @@ export const campusRouter = createTRPCRouter({
 
         // Create teacher assignments
         if (subjects.length > 0) {
-          // First get active teachers for this campus
           const activeTeachers = await ctx.prisma.teacherProfile.findMany({
             where: {
-              campuses: {
+              TeacherCampus: {
                 some: {
                   campusId: input.campusId,
                   status: "ACTIVE"
@@ -1059,7 +1058,7 @@ export const campusRouter = createTRPCRouter({
       if (subjects.length > 0) {
         const activeTeachers = await ctx.prisma.teacherProfile.findMany({
           where: {
-            campuses: {
+            TeacherCampus: {
               some: {
                 campusId: input.campusId,
                 status: "ACTIVE"

@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { TRPCError } from "@trpc/server";
 import { TeacherProfile } from "../../types/teacher";
-import { CampusPermission } from "../../types/enums";
+import { CampusPermission } from "../../types/campus";
 import { CampusUserService } from "./CampusUserService";
 
 interface AttendanceStats {
@@ -41,7 +41,7 @@ export class CampusReportingService {
 		const hasPermission = await this.userService.hasPermission(
 			userId,
 			campusId,
-			CampusPermission.VIEW_REPORTS
+			CampusPermission.VIEW_CAMPUS_ANALYTICS
 		);
 
 		if (!hasPermission) {
@@ -90,7 +90,7 @@ export class CampusReportingService {
 		const hasPermission = await this.userService.hasPermission(
 			userId,
 			campusId,
-			CampusPermission.VIEW_REPORTS
+			CampusPermission.VIEW_CAMPUS_ANALYTICS
 		);
 
 		if (!hasPermission) {
@@ -140,7 +140,7 @@ export class CampusReportingService {
 		const hasPermission = await this.userService.hasPermission(
 			userId,
 			campusId,
-			CampusPermission.VIEW_REPORTS
+			CampusPermission.VIEW_CAMPUS_ANALYTICS
 		);
 
 		if (!hasPermission) {
@@ -152,7 +152,14 @@ export class CampusReportingService {
 
 		try {
 			const teachers = await this.db.teacherProfile.findMany({
-				where: { campusId },
+				where: { 
+					campuses: {
+						some: {
+							campusId: campusId,
+							status: "ACTIVE"
+						}
+					}
+				},
 				include: {
 					user: true,
 					subjects: true,
