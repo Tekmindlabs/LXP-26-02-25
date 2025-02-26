@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Status } from '@prisma/client';
 
 export async function seedClasses(prisma: PrismaClient) {
 	console.log('Seeding classes...');
@@ -26,32 +26,22 @@ export async function seedClasses(prisma: PrismaClient) {
 	}
 
 	// Create two classes for each class group
-	const classesData = classGroups.flatMap(group => [
+	const classesData = classGroups.flatMap((group, index) => [
 		{
 			name: `${group.name} A`,
-			description: `Section A of ${group.name}`,
-			capacity: group.metadata?.capacity || 20,
+			code: `${group.name.substring(0, 3).toUpperCase()}-A-${index + 1}`,
+			capacity: 20,
 			classGroupId: group.id,
 			campusId: campus.id,
-			status: 'ACTIVE',
-			metadata: {
-				section: 'A',
-				schedule: 'Morning',
-				timing: '8:00 AM - 12:00 PM'
-			}
+			status: Status.ACTIVE
 		},
 		{
 			name: `${group.name} B`,
-			description: `Section B of ${group.name}`,
-			capacity: group.metadata?.capacity || 20,
+			code: `${group.name.substring(0, 3).toUpperCase()}-B-${index + 1}`,
+			capacity: 20,
 			classGroupId: group.id,
 			campusId: campus.id,
-			status: 'ACTIVE',
-			metadata: {
-				section: 'B',
-				schedule: 'Afternoon',
-				timing: '1:00 PM - 5:00 PM'
-			}
+			status: Status.ACTIVE
 		}
 	]);
 

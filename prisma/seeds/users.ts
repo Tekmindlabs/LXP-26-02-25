@@ -1,4 +1,4 @@
-import { PrismaClient, UserType, Status } from '@prisma/client';
+import { PrismaClient, UserType, Status, CoordinatorType, TeacherType } from '@prisma/client';
 import { hash } from 'bcryptjs';
 
 interface SeedUsersResult {
@@ -22,15 +22,48 @@ export async function seedUsers(prisma: PrismaClient): Promise<SeedUsersResult> 
 		throw new Error('Campus not found');
 	}
 
+	// Create roles if they don't exist
+	const roles = {
+		superAdmin: await prisma.role.upsert({
+			where: { name: 'super-admin' },
+			update: {},
+			create: {
+				name: 'super-admin',
+				description: 'Super Administrator'
+			}
+		}),
+		coordinator: await prisma.role.upsert({
+			where: { name: UserType.COORDINATOR },
+			update: {},
+			create: {
+				name: UserType.COORDINATOR,
+				description: 'Campus Coordinator'
+			}
+		}),
+		teacher: await prisma.role.upsert({
+			where: { name: UserType.TEACHER },
+			update: {},
+			create: {
+				name: UserType.TEACHER,
+				description: 'Teacher'
+			}
+		})
+	};
+
 	// Create super admin
 	const superAdminPassword = await hash('superadmin123', 12);
 	const superAdmin = await prisma.user.create({
 		data: {
 			name: 'System Administrator',
-			email: 'admin@earlyyears.edu',
+			email: 'admin@school.com',
 			password: superAdminPassword,
-			userType: 'super-admin' as UserType,
-			status: Status.ACTIVE
+			userType: UserType.ADMIN,
+			status: Status.ACTIVE,
+			userRoles: {
+				create: {
+					roleId: roles.superAdmin.id
+				}
+			}
 		}
 	});
 
@@ -43,133 +76,117 @@ export async function seedUsers(prisma: PrismaClient): Promise<SeedUsersResult> 
 			password: coordinatorPassword,
 			userType: UserType.COORDINATOR,
 			status: Status.ACTIVE,
+			userRoles: {
+				create: {
+					roleId: roles.coordinator.id
+				}
+			},
 			coordinatorProfile: {
 				create: {
-					coordinatorType: 'PROGRAM'
+					type: CoordinatorType.PROGRAM_COORDINATOR,
+					responsibilities: ['Early Childhood Education Program'],
+					campusId: campus.id
 				}
 			}
-		},
-		include: {
-			coordinatorProfile: true
 		}
 	});
 
 	// Create teachers
-	const teacherPassword = await hash('teacher123', 12);
 	const teachers = await Promise.all([
 		prisma.user.create({
 			data: {
 				name: 'Emily Davis',
 				email: 'emily.davis@earlyyears.edu',
-				password: teacherPassword,
+				password: await hash('teacher123', 12),
 				userType: UserType.TEACHER,
 				status: Status.ACTIVE,
+				userRoles: {
+					create: {
+						roleId: roles.teacher.id
+					}
+				},
 				teacherProfile: {
-					create: {}
+					create: {
+						teacherType: TeacherType.CLASS,
+						specialization: 'Early Years Education',
+						campuses: {
+							create: {
+								campusId: campus.id,
+								isPrimary: true,
+								status: Status.ACTIVE,
+								joinedAt: new Date()
+							}
+						}
+					}
 				}
-			},
-			include: {
-				teacherProfile: true
 			}
 		}),
 		prisma.user.create({
 			data: {
 				name: 'Michael Brown',
 				email: 'michael.brown@earlyyears.edu',
-				password: teacherPassword,
+				password: await hash('teacher123', 12),
 				userType: UserType.TEACHER,
 				status: Status.ACTIVE,
+				userRoles: {
+					create: {
+						roleId: roles.teacher.id
+					}
+				},
 				teacherProfile: {
-					create: {}
+					create: {
+						teacherType: TeacherType.SUBJECT,
+						specialization: 'Music Education',
+						campuses: {
+							create: {
+								campusId: campus.id,
+								isPrimary: true,
+								status: Status.ACTIVE,
+								joinedAt: new Date()
+							}
+						}
+					}
 				}
-			},
-			include: {
-				teacherProfile: true
 			}
 		}),
 		prisma.user.create({
 			data: {
 				name: 'Lisa Wilson',
 				email: 'lisa.wilson@earlyyears.edu',
-				password: teacherPassword,
+				password: await hash('teacher123', 12),
 				userType: UserType.TEACHER,
 				status: Status.ACTIVE,
+				userRoles: {
+					create: {
+						roleId: roles.teacher.id
+					}
+				},
 				teacherProfile: {
-					create: {}
+					create: {
+						teacherType: TeacherType.CLASS,
+						specialization: 'Art Education',
+						campuses: {
+							create: {
+								campusId: campus.id,
+								isPrimary: true,
+								status: Status.ACTIVE,
+								joinedAt: new Date()
+							}
+						}
+					}
 				}
-			},
-			include: {
-				teacherProfile: true
 			}
 		})
 	]);
 
-	// Create students (2 for each class)
-	const classes = await prisma.class.findMany({
-		where: {
-			campus: { id: campus.id }
-		}
-	});
+	console.log('✅ Users seeded successfully');
 
-	const studentPassword = await hash('student123', 12);
-	const students = [];
-
-	for (const classObj of classes) {
-		// Create two students per class
-		for (let i = 1; i <= 2; i++) {
-			const student = await prisma.user.create({
-				data: {
-					name: `Student ${classObj.name}-${i}`,
-					email: `student.${classObj.name.toLowerCase().replace(' ', '')}.${i}@earlyyears.edu`,
-					password: studentPassword,
-					userType: UserType.STUDENT,
-					status: Status.ACTIVE,
-					studentProfile: {
-						create: {
-							classId: classObj.id
-						}
-					}
-				},
-				include: {
-					studentProfile: true
-				}
-			});
-			students.push(student);
-		}
-	}
-
-	// Assign teachers to campus
-	for (const teacher of teachers) {
-		if (teacher.teacherProfile) {
-			await prisma.teacherCampus.create({
-				data: {
-					teacherId: teacher.teacherProfile.id,
-					campusId: campus.id,
-					status: Status.ACTIVE,
-					isPrimary: true,
-					joinedAt: new Date()
-				}
-			});
-		}
-	}
-
-	// Assign coordinator to campus
-	await prisma.campusRole.create({
-		data: {
-			userId: coordinator.id,
-			campusId: campus.id,
-			roleId: 'CAMPUS_PROGRAM_COORDINATOR',
-			status: Status.ACTIVE
-		}
-	});
-
-	console.log('✅ Users seeded');
 	return {
 		users: {
 			superAdmin,
 			coordinator,
 			teachers,
-			students
+			students: []
 		}
 	};
 }

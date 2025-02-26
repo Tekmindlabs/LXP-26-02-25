@@ -8,8 +8,15 @@ import { RoleLayouts } from "./layouts/RoleLayouts";
 import { DashboardFeatures } from "./features/DashboardFeatures";
 import { api } from "@/trpc/react";
 import type { Program } from "@prisma/client";
+import { type ReactNode } from "react";
 
-export const DashboardContent = ({ role, campusId }: { role: string; campusId: string }) => {
+interface DashboardContentProps {
+  role: string;
+  campusId: string;
+  children?: ReactNode;
+}
+
+export const DashboardContent = ({ role, campusId, children }: DashboardContentProps) => {
   const { data: session } = useSession();
   
   // Convert the role to kebab-case for feature lookup
@@ -51,6 +58,7 @@ export const DashboardContent = ({ role, campusId }: { role: string; campusId: s
 
   return (
     <div className="space-y-6">
+      {children}
       <h1 className="text-3xl font-bold">
         {roleTitle} Dashboard
       </h1>

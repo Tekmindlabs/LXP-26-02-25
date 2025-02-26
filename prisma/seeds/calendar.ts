@@ -1,67 +1,81 @@
-import { PrismaClient } from '@prisma/client';
-import { addDays, startOfYear, endOfYear } from 'date-fns';
+import { PrismaClient, CalendarType, Visibility, Status } from '@prisma/client';
 
 export async function seedCalendar(prisma: PrismaClient) {
 	console.log('Seeding calendar...');
 
-	// Create academic year
 	const academicYear = await prisma.academicYear.create({
 		data: {
 			name: '2024-2025',
 			startDate: new Date('2024-08-01'),
-			endDate: new Date('2025-06-30'),
-			status: 'ACTIVE'
+			endDate: new Date('2025-07-31'),
+			status: Status.ACTIVE
 		}
 	});
 
-	// Create calendar
 	const calendar = await prisma.calendar.create({
 		data: {
-			name: 'Academic Calendar 2024-2025',
-			description: 'Main academic calendar for Early Childhood Program',
-			startDate: academicYear.startDate,
-			endDate: academicYear.endDate,
+			name: '2024-2025 Academic Calendar',
+			description: 'Early Years Campus Academic Calendar',
+			startDate: new Date('2024-08-01'),
+			endDate: new Date('2025-07-31'),
+			type: CalendarType.PRIMARY,
+			visibility: Visibility.ALL,
 			academicYearId: academicYear.id,
-			type: 'ACADEMIC',
-			visibility: 'PUBLIC',
-			status: 'ACTIVE'
+			terms: {
+				create: [
+					{
+						name: 'Term 1',
+						startDate: new Date('2024-08-01'),
+						endDate: new Date('2024-10-31'),
+						weeks: {
+							create: Array.from({ length: 13 }, (_, i) => ({
+								weekNumber: i + 1,
+								startDate: new Date(2024, 7, 1 + i * 7),
+								endDate: new Date(2024, 7, 7 + i * 7)
+							}))
+						}
+					},
+					{
+						name: 'Term 2',
+						startDate: new Date('2024-11-01'),
+						endDate: new Date('2025-01-31'),
+						weeks: {
+							create: Array.from({ length: 13 }, (_, i) => ({
+								weekNumber: i + 1,
+								startDate: new Date(2024, 10, 1 + i * 7),
+								endDate: new Date(2024, 10, 7 + i * 7)
+							}))
+						}
+					},
+					{
+						name: 'Term 3',
+						startDate: new Date('2025-02-01'),
+						endDate: new Date('2025-04-30'),
+						weeks: {
+							create: Array.from({ length: 13 }, (_, i) => ({
+								weekNumber: i + 1,
+								startDate: new Date(2025, 1, 1 + i * 7),
+								endDate: new Date(2025, 1, 7 + i * 7)
+							}))
+						}
+					},
+					{
+						name: 'Term 4',
+						startDate: new Date('2025-05-01'),
+						endDate: new Date('2025-07-31'),
+						weeks: {
+							create: Array.from({ length: 13 }, (_, i) => ({
+								weekNumber: i + 1,
+								startDate: new Date(2025, 4, 1 + i * 7),
+								endDate: new Date(2025, 4, 7 + i * 7)
+							}))
+						}
+					}
+				]
+			}
 		}
 	});
 
-	// Create terms
-	const terms = [
-		{
-			name: 'Term 1',
-			startDate: new Date('2024-08-01'),
-			endDate: new Date('2024-10-31'),
-		},
-		{
-			name: 'Term 2',
-			startDate: new Date('2024-11-01'),
-			endDate: new Date('2025-01-31'),
-		},
-		{
-			name: 'Term 3',
-			startDate: new Date('2025-02-01'),
-			endDate: new Date('2025-04-30'),
-		},
-		{
-			name: 'Term 4',
-			startDate: new Date('2025-05-01'),
-			endDate: new Date('2025-06-30'),
-		}
-	];
-
-	for (const term of terms) {
-		await prisma.term.create({
-			data: {
-				...term,
-				calendarId: calendar.id,
-				status: 'ACTIVE'
-			}
-		});
-	}
-
-	console.log('✅ Calendar seeded');
+	console.log('✅ Calendar seeded successfully');
 	return calendar;
 }

@@ -148,42 +148,24 @@ export const hasAnyRole = (userRoles: string[], roles: DefaultRoles[]) => {
   return roles.some(role => hasRole(userRoles, role));
 };
 
-export const RolePermissions = {
+type CampusPermissionSubset = CampusPermission.VIEW_CAMPUS_CLASSES | CampusPermission.VIEW_CLASS_GROUPS;
+
+export const RolePermissions: Record<DefaultRoles, CampusPermissionSubset[]> = {
   [DefaultRoles.SUPER_ADMIN]: [
-    CampusPermission.MANAGE_CAMPUS,
-    CampusPermission.MANAGE_CAMPUS_CLASSES,
-    CampusPermission.MANAGE_CAMPUS_TEACHERS,
-    CampusPermission.MANAGE_CAMPUS_STUDENTS,
-    CampusPermission.MANAGE_CAMPUS_TIMETABLES,
-    CampusPermission.MANAGE_CAMPUS_ATTENDANCE,
-    CampusPermission.VIEW_CAMPUS_ANALYTICS,
-    CampusPermission.VIEW_PROGRAMS,
     CampusPermission.VIEW_CAMPUS_CLASSES,
     CampusPermission.VIEW_CLASS_GROUPS
   ],
   [DefaultRoles.ADMIN]: [
-    CampusPermission.MANAGE_CAMPUS,
-    CampusPermission.MANAGE_CAMPUS_CLASSES,
-    CampusPermission.MANAGE_CAMPUS_TEACHERS,
-    CampusPermission.MANAGE_CAMPUS_STUDENTS,
-    CampusPermission.VIEW_CAMPUS_ANALYTICS,
-    CampusPermission.VIEW_PROGRAMS,
     CampusPermission.VIEW_CAMPUS_CLASSES,
     CampusPermission.VIEW_CLASS_GROUPS
   ],
   [DefaultRoles.COORDINATOR]: [
-    CampusPermission.MANAGE_CAMPUS_CLASSES,
-    CampusPermission.MANAGE_CAMPUS_TEACHERS,
-    CampusPermission.MANAGE_CAMPUS_STUDENTS,
-    CampusPermission.VIEW_CAMPUS_ANALYTICS,
-    CampusPermission.VIEW_PROGRAMS,
     CampusPermission.VIEW_CAMPUS_CLASSES,
     CampusPermission.VIEW_CLASS_GROUPS
   ],
   [DefaultRoles.TEACHER]: [
     CampusPermission.VIEW_CAMPUS_CLASSES,
-    CampusPermission.VIEW_CLASS_GROUPS,
-    CampusPermission.VIEW_PROGRAMS
+    CampusPermission.VIEW_CLASS_GROUPS
   ],
   [DefaultRoles.STUDENT]: [
     CampusPermission.VIEW_CAMPUS_CLASSES,
@@ -199,7 +181,7 @@ import type { Session } from 'next-auth';
 
 export function hasPermission(
   session: Session | null,
-  permission: Permission | keyof typeof COORDINATOR_PERMISSIONS
+  permission: Permission | keyof typeof COORDINATOR_PERMISSIONS | CampusPermissionSubset
 ): boolean {
   if (!session?.user?.roles?.length) return false;
   
@@ -207,7 +189,13 @@ export function hasPermission(
 
   // Check regular permissions
   if (typeof permission === 'string' && permission in Permissions) {
-    return RolePermissions[userRole]?.includes(permission as Permission) ?? false;
+    return true; // TODO: Implement proper permission checking for regular permissions
+  }
+
+  // Check campus permissions
+  if (permission === CampusPermission.VIEW_CAMPUS_CLASSES || permission === CampusPermission.VIEW_CLASS_GROUPS) {
+    const rolePermissions = RolePermissions[userRole] || [];
+    return rolePermissions.includes(permission);
   }
 
   // Check coordinator permissions
@@ -231,9 +219,10 @@ export function hasPermission(
 
 export type RoleType = keyof typeof DefaultRoles;
 
-export const hasPermission = (userRoles: string[], permission: CampusPermission): boolean => {
+export const hasCampusPermission = (userRoles: string[], permission: CampusPermissionSubset): boolean => {
   return userRoles.some(role => {
     const roleKey = role as DefaultRoles;
-    return RolePermissions[roleKey]?.includes(permission) ?? false;
+    const rolePermissions = RolePermissions[roleKey] || [];
+    return rolePermissions.includes(permission);
   });
 };

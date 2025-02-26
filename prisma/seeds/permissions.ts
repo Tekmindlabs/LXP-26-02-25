@@ -2,9 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { DefaultRoles, RolePermissions } from '@/utils/permissions';
 import { CampusPermission } from '@/types/enums';
 
-const prisma = new PrismaClient();
-
-export async function seedPermissions() {
+export async function seedPermissions(prisma: PrismaClient) {
 	console.log('Seeding permissions...');
 
 	// Create roles
@@ -31,17 +29,21 @@ export async function seedPermissions() {
 
 		// Create permissions for this role
 		for (const permission of permissions) {
-			await prisma.permission.upsert({
-				where: {
-					roleId_permission: {
-						roleId: role.id,
-						permission: permission
-					}
-				},
+			// First create or get the permission
+			const permissionRecord = await prisma.permission.upsert({
+				where: { name: permission },
 				update: {},
 				create: {
+					name: permission,
+					description: `Permission to ${permission.toLowerCase().replace('_', ' ')}`
+				}
+			});
+
+			// Then create the role-permission association
+			await prisma.rolePermission.create({
+				data: {
 					roleId: role.id,
-					permission: permission
+					permissionId: permissionRecord.id
 				}
 			});
 		}

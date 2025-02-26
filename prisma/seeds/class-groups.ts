@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Status } from '@prisma/client';
 
 export async function seedClassGroups(prisma: PrismaClient) {
 	console.log('Seeding class groups...');
@@ -14,7 +14,7 @@ export async function seedClassGroups(prisma: PrismaClient) {
 
 	// Get the calendar
 	const calendar = await prisma.calendar.findFirst({
-		where: { name: 'Academic Calendar 2024-2025' }
+		where: { name: '2024-2025 Academic Calendar' }
 	});
 
 	if (!calendar) {
@@ -26,7 +26,7 @@ export async function seedClassGroups(prisma: PrismaClient) {
 		{
 			name: 'Playgroup',
 			description: 'Early learning group for 2-3 year olds',
-			metadata: {
+			settings: {
 				ageGroup: '2-3 years',
 				capacity: 15,
 				teacherRatio: '1:5'
@@ -35,7 +35,7 @@ export async function seedClassGroups(prisma: PrismaClient) {
 		{
 			name: 'Nursery',
 			description: 'Nursery group for 3-4 year olds',
-			metadata: {
+			settings: {
 				ageGroup: '3-4 years',
 				capacity: 20,
 				teacherRatio: '1:7'
@@ -43,8 +43,8 @@ export async function seedClassGroups(prisma: PrismaClient) {
 		},
 		{
 			name: 'Preparatory',
-			description: 'Preparatory group for 4-5 year olds',
-			metadata: {
+			description: 'Preparatory group for 4-5 years olds',
+			settings: {
 				ageGroup: '4-5 years',
 				capacity: 20,
 				teacherRatio: '1:8'
@@ -58,7 +58,7 @@ export async function seedClassGroups(prisma: PrismaClient) {
 		const classGroup = await prisma.classGroup.create({
 			data: {
 				...group,
-				status: 'ACTIVE',
+				status: Status.ACTIVE,
 				program: {
 					connect: { id: program.id }
 				},
