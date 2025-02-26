@@ -565,23 +565,59 @@ export const campusRouter = createTRPCRouter({
         // Get program subjects
         const subjects = await ctx.prisma.subject.findMany({
           where: {
-            programSubjects: {
-              some: {
-                programId: classGroup.program.id
+            OR: [
+              {
+                classGroups: {
+                  some: {
+                    id: classGroup.id
+                  }
+                }
+              },
+              {
+                teachers: {
+                  some: {
+                    teacher: {
+                      classes: {
+                        some: {
+                          class: {
+                            classGroupId: classGroup.id
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
-            }
+            ]
           }
         });
 
         // Create teacher assignments
         if (subjects.length > 0) {
-          await ctx.prisma.teacherClass.createMany({
-            data: subjects.map(subject => ({
-              classId: newClass.id,
-              subjectId: subject.id,
-              status: "ACTIVE"
-            }))
+          // First get active teachers for this campus
+          const activeTeachers = await ctx.prisma.teacherProfile.findMany({
+            where: {
+              campuses: {
+                some: {
+                  campusId: input.campusId,
+                  status: "ACTIVE"
+                }
+              }
+            },
+            take: 1
           });
+
+          if (activeTeachers.length > 0) {
+            await Promise.all(subjects.map(subject => 
+              ctx.prisma.teacherClass.create({
+                data: {
+                  classId: newClass.id,
+                  teacherId: activeTeachers[0].id,
+                  status: "ACTIVE"
+                }
+              })
+            ));
+          }
         }
 
         return ctx.prisma.class.findUnique({
@@ -992,11 +1028,30 @@ export const campusRouter = createTRPCRouter({
       // Get program subjects
       const subjects = await ctx.prisma.subject.findMany({
         where: {
-          programSubjects: {
-            some: {
-              programId: classGroup.programId
+          OR: [
+            {
+              classGroups: {
+                some: {
+                  id: classGroup.id
+                }
+              }
+            },
+            {
+              teachers: {
+                some: {
+                  teacher: {
+                    classes: {
+                      some: {
+                        class: {
+                          classGroupId: classGroup.id
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
-          }
+          ]
         }
       });
 
@@ -1004,13 +1059,14 @@ export const campusRouter = createTRPCRouter({
       if (subjects.length > 0) {
         const activeTeachers = await ctx.prisma.teacherProfile.findMany({
           where: {
-            TeacherCampus: {
+            campuses: {
               some: {
                 campusId: input.campusId,
                 status: "ACTIVE"
               }
             }
-          }
+          },
+          take: 1
         });
 
         if (activeTeachers.length > 0) {
@@ -1019,8 +1075,7 @@ export const campusRouter = createTRPCRouter({
               data: {
                 classId: newClass.id,
                 teacherId: activeTeachers[0].id,
-                status: "ACTIVE",
-                subjectId: subject.id
+                status: "ACTIVE"
               }
             })
           ));
