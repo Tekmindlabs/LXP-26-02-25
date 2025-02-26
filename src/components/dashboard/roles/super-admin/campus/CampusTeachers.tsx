@@ -15,19 +15,44 @@ import {
 } from "@/components/ui/select";
 import { Users2, Search } from "lucide-react";
 import { useState } from "react";
+import { type Status } from "@prisma/client";
 
 interface CampusTeachersProps {
   campusId: string;
 }
 
+// Define the teacher type based on the API response
+interface TeacherWithClasses {
+  id: string;
+  name: string | null;
+  email: string | null;
+  status: Status;
+  isPrimary: boolean;
+  teacherType: string | null;
+  specialization: string | null;
+  classes: {
+    id: string;
+    name: string;
+    classGroup: {
+      id: string;
+      name: string;
+    };
+    subject: {
+      id: string;
+      name: string;
+    };
+  }[];
+}
+
 const CampusTeachers: FC<CampusTeachersProps> = ({ campusId }) => {
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<"ACTIVE" | "INACTIVE" | undefined>("ACTIVE");
+  const [status, setStatus] = useState<"ACTIVE" | "INACTIVE" | "ALL">("ACTIVE");
+  const [includeInactive, setIncludeInactive] = useState(false);
 
   const { data: teachers, isLoading } = api.campus.getTeachers.useQuery({
     campusId,
     search,
-    status,
+    includeInactive: status === "ALL" || includeInactive,
   });
 
   if (isLoading) {
@@ -61,7 +86,10 @@ const CampusTeachers: FC<CampusTeachersProps> = ({ campusId }) => {
               </div>
               <Select
                 value={status}
-                onValueChange={(value: typeof status) => setStatus(value)}
+                onValueChange={(value) => {
+                  setStatus(value as "ACTIVE" | "INACTIVE" | "ALL");
+                  setIncludeInactive(value === "ALL" || value === "INACTIVE");
+                }}
               >
                 <SelectTrigger className="h-8 w-[150px]">
                   <SelectValue placeholder="Select status" />
@@ -69,6 +97,7 @@ const CampusTeachers: FC<CampusTeachersProps> = ({ campusId }) => {
                 <SelectContent>
                   <SelectItem value="ACTIVE">Active</SelectItem>
                   <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  <SelectItem value="ALL">All</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -82,16 +111,16 @@ const CampusTeachers: FC<CampusTeachersProps> = ({ campusId }) => {
                   No teachers found
                 </p>
               ) : (
-                teachers?.map((teacher) => (
+                teachers?.map((teacher: TeacherWithClasses) => (
                   <Card key={teacher.id}>
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <div>
                           <CardTitle className="text-lg">
-                            {teacher.user.firstName} {teacher.user.lastName}
+                            {teacher.name}
                           </CardTitle>
                           <p className="text-sm text-muted-foreground">
-                            {teacher.teacherId}
+                            {teacher.id}
                           </p>
                         </div>
                         <Badge
@@ -107,26 +136,26 @@ const CampusTeachers: FC<CampusTeachersProps> = ({ campusId }) => {
                       <div className="space-y-4">
                         <div>
                           <span className="font-medium">Email: </span>
-                          {teacher.user.email}
+                          {teacher.email}
                         </div>
                         <div>
                           <span className="font-medium">Teaching Assignments: </span>
                           <div className="mt-2 space-y-2">
-                            {teacher.teacherAllocations.map((allocation) => (
+                            {teacher.classes.map((classItem) => (
                               <div
-                                key={allocation.id}
+                                key={classItem.id}
                                 className="rounded-lg border p-3"
                               >
                                 <div className="flex items-center justify-between">
                                   <span className="font-medium">
-                                    {allocation.campusClass.name}
+                                    {classItem.name}
                                   </span>
                                   <Badge variant="outline">
-                                    {allocation.subject.name}
+                                    {classItem.subject.name}
                                   </Badge>
                                 </div>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                  {allocation.campusClass.classGroup.name}
+                                  {classItem.classGroup.name}
                                 </p>
                               </div>
                             ))}

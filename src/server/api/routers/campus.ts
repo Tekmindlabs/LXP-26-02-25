@@ -333,15 +333,21 @@ export const campusRouter = createTRPCRouter({
   getTeachers: protectedProcedure
     .input(z.object({
       campusId: z.string(),
-      status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
       search: z.string().optional(),
-      includeInactive: z.boolean().optional(),
+      includeInactive: z.boolean().optional()
     }))
     .query(async ({ ctx, input }) => {
       const campusTeacherService = new CampusTeacherService(
         ctx.prisma,
         new CampusUserService(ctx.prisma)
       );
+      
+      if (!ctx.session || !ctx.session.user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "You must be logged in to view teachers"
+        });
+      }
       
       const teachers = await campusTeacherService.getTeachersForCampus(
         ctx.session.user.id,
@@ -351,7 +357,7 @@ export const campusRouter = createTRPCRouter({
       
       // Apply search filter if provided
       if (input.search) {
-        return teachers.filter(teacher => 
+        return teachers.filter((teacher: { name: string | null; email: string | null }) => 
           teacher.name?.toLowerCase().includes(input.search!.toLowerCase()) ||
           teacher.email?.toLowerCase().includes(input.search!.toLowerCase())
         );
@@ -443,8 +449,7 @@ export const campusRouter = createTRPCRouter({
                 include: {
                   user: true
                 }
-              },
-              subject: true
+              }
             }
           },
           _count: {
@@ -841,13 +846,20 @@ export const campusRouter = createTRPCRouter({
     .input(z.object({
       campusId: z.string(),
       teacherId: z.string(),
-      isPrimary: z.boolean().optional(),
+      isPrimary: z.boolean().optional()
     }))
     .mutation(async ({ ctx, input }) => {
       const campusTeacherService = new CampusTeacherService(
         ctx.prisma,
         new CampusUserService(ctx.prisma)
       );
+      
+      if (!ctx.session || !ctx.session.user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "You must be logged in to assign teachers to campus"
+        });
+      }
       
       return campusTeacherService.assignTeacherToCampus(
         ctx.session.user.id,
@@ -868,6 +880,13 @@ export const campusRouter = createTRPCRouter({
         new CampusUserService(ctx.prisma)
       );
       
+      if (!ctx.session || !ctx.session.user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "You must be logged in to remove teachers from campus"
+        });
+      }
+      
       return campusTeacherService.removeTeacherFromCampus(
         ctx.session.user.id,
         input.campusId,
@@ -886,6 +905,13 @@ export const campusRouter = createTRPCRouter({
         ctx.prisma,
         new CampusUserService(ctx.prisma)
       );
+      
+      if (!ctx.session || !ctx.session.user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "You must be logged in to update teacher status"
+        });
+      }
       
       return campusTeacherService.updateTeacherCampusStatus(
         ctx.session.user.id,
@@ -906,10 +932,118 @@ export const campusRouter = createTRPCRouter({
         new CampusUserService(ctx.prisma)
       );
       
+      if (!ctx.session || !ctx.session.user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "You must be logged in to set primary campus"
+        });
+      }
+      
       return campusTeacherService.setPrimaryCampus(
         ctx.session.user.id,
         input.teacherId,
         input.campusId
+      );
+    }),
+
+  createClassFromTemplate: protectedProcedure
+    .input(z.object({
+      campusId: z.string(),
+      classGroupId: z.string(),
+      name: z.string(),
+      code: z.string().optional()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Get class group
+      const classGroup = await ctx.prisma.classGroup.findUnique({
+        where: { id: input.classGroupId },
+        include: {
+          program: true
+        }
+      });
+
+      if (!classGroup) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Class group not found"
+        });
+      }
+
+      // Create class
+      const newClass = await ctx.prisma.class.create({
+        data: {
+          name: input.name,
+          // Use a custom code generator if code is not provided
+          code: input.code || input.name.substring(0, 3).toUpperCase(),
+          campusId: input.campusId,
+          classGroupId: input.classGroupId,
+          status: "ACTIVE"
+        }
+      });
+
+      // Get program subjects
+      const subjects = await ctx.prisma.subject.findMany({
+        where: {
+          programId: classGroup.program.id
+        }
+      });
+
+      // Create teacher assignments
+      if (subjects.length > 0) {
+        const activeTeachers = await ctx.prisma.teacherProfile.findMany({
+          where: {
+            teacherCampus: {
+              some: {
+                campusId: input.campusId,
+                status: "ACTIVE"
+              }
+            }
+          }
+        });
+
+        if (activeTeachers.length > 0) {
+          await Promise.all(subjects.map(subject => 
+            ctx.prisma.teacherClass.create({
+              data: {
+                classId: newClass.id,
+                teacherId: activeTeachers[0].id,
+                status: "ACTIVE",
+                // Create a separate record for each subject
+                subject: {
+                  connect: {
+                    id: subject.id
+                  }
+                }
+              }
+            })
+          ));
+        }
+      }
+
+      return newClass;
+    }),
+
+  // Add a new endpoint to get campuses for a teacher
+  getTeacherCampuses: protectedProcedure
+    .input(z.object({
+      teacherId: z.string()
+    }))
+    .query(async ({ ctx, input }) => {
+      if (!ctx.session || !ctx.session.user) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "You must be logged in to view teacher campuses"
+        });
+      }
+      
+      const campusTeacherService = new CampusTeacherService(
+        ctx.prisma,
+        new CampusUserService(ctx.prisma)
+      );
+      
+      return campusTeacherService.getCampusesForTeacher(
+        ctx.session.user.id,
+        input.teacherId
       );
     }),
 });
