@@ -70,7 +70,6 @@ export class CampusTeacherService {
     teacherId: string, 
     isPrimary: boolean = false
   ): Promise<TeacherCampusAssignment> {
-    // Check if user has permission to manage campus teachers
     const hasPermission = await this.userService.hasPermission(
       userId,
       campusId,
@@ -84,92 +83,111 @@ export class CampusTeacherService {
       });
     }
     
-    // Check if teacher exists
-    const teacher = await this.db.teacherProfile.findUnique({
-      where: { id: teacherId }
-    });
-    
-    if (!teacher) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Teacher not found"
+    try {
+      // Check if teacher exists
+      const teacher = await this.db.teacherProfile.findUnique({
+        where: { id: teacherId },
+        include: { user: true }
       });
-    }
-    
-    // Check if campus exists
-    const campus = await this.db.campus.findUnique({
-      where: { id: campusId }
-    });
-    
-    if (!campus) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Campus not found"
-      });
-    }
-    
-    // Since teacherCampus doesn't exist in Prisma, we'll use a custom implementation
-    // First check if relationship already exists
-    const existingRelationship = await this.db.$queryRaw`
-      SELECT * FROM "TeacherCampus" 
-      WHERE "teacherId" = ${teacherId} AND "campusId" = ${campusId}
-    `;
-    
-    if (Array.isArray(existingRelationship) && existingRelationship.length > 0) {
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: "Teacher is already assigned to this campus"
-      });
-    }
-    
-    // If this is the primary campus, unset any existing primary campus
-    if (isPrimary) {
-      await this.db.$executeRaw`
-        UPDATE "TeacherCampus" 
-        SET "isPrimary" = false 
-        WHERE "teacherId" = ${teacherId} AND "isPrimary" = true
-      `;
-    }
-    
-    // Create the relationship
-    const result = await this.db.$executeRaw`
-      INSERT INTO "TeacherCampus" ("teacherId", "campusId", "isPrimary", "status", "joinedAt", "createdAt", "updatedAt")
-      VALUES (${teacherId}, ${campusId}, ${isPrimary}, ${Status.ACTIVE}, ${new Date()}, ${new Date()}, ${new Date()})
-      RETURNING *
-    `;
-    
-    // Fetch the created relationship with includes
-    const teacherCampus: TeacherCampusAssignment = {
-      teacherId,
-      campusId,
-      isPrimary,
-      status: Status.ACTIVE,
-      joinedAt: new Date(),
-      campus: {
-        id: campus.id,
-        name: campus.name
-      },
-      teacher: {
-        id: teacher.id,
-        user: {
-          id: teacher.userId,
-          name: null,
-          email: null
-        }
+      
+      if (!teacher) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Teacher not found"
+        });
       }
-    };
-    
-    // Get user details
-    const user = await this.db.user.findUnique({
-      where: { id: teacher.userId }
-    });
-    
-    if (user && teacherCampus.teacher) {
-      teacherCampus.teacher.user.name = user.name;
-      teacherCampus.teacher.user.email = user.email;
+      
+      // Check if campus exists
+      const campus = await this.db.campus.findUnique({
+        where: { id: campusId }
+      });
+      
+      if (!campus) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Campus not found"
+        });
+      }
+      
+      // Check if relationship already exists
+      const existingAssignment = await this.db.teacherCampus.findUnique({
+        where: {
+          teacherId_campusId: {
+            teacherId,
+            campusId
+          }
+        }
+      });
+      
+      if (existingAssignment) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Teacher is already assigned to this campus"
+        });
+      }
+      
+      // If this is primary, unset other primary assignments
+      if (isPrimary) {
+        await this.db.teacherCampus.updateMany({
+          where: {
+            teacherId,
+            isPrimary: true
+          },
+          data: {
+            isPrimary: false
+          }
+        });
+      }
+      
+      // Create the assignment
+      const assignment = await this.db.teacherCampus.create({
+        data: {
+          teacherId,
+          campusId,
+          isPrimary,
+          status: Status.ACTIVE,
+          joinedAt: new Date()
+        },
+        include: {
+          campus: true,
+          teacher: {
+            include: {
+              user: true
+            }
+          }
+        }
+      });
+      
+      return {
+        id: assignment.id,
+        teacherId: assignment.teacherId,
+        campusId: assignment.campusId,
+        isPrimary: assignment.isPrimary,
+        status: assignment.status,
+        joinedAt: assignment.joinedAt,
+        createdAt: assignment.createdAt,
+        updatedAt: assignment.updatedAt,
+        campus: {
+          id: assignment.campus.id,
+          name: assignment.campus.name
+        },
+        teacher: {
+          id: assignment.teacher.id,
+          user: {
+            id: assignment.teacher.user.id,
+            name: assignment.teacher.user.name,
+            email: assignment.teacher.user.email
+          }
+        }
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to assign teacher to campus",
+        cause: error
+      });
     }
-    
-    return teacherCampus;
   }
   
   async removeTeacherFromCampus(
@@ -192,12 +210,16 @@ export class CampusTeacherService {
     }
     
     // Check if relationship exists
-    const relationship = await this.db.$queryRaw`
-      SELECT * FROM "TeacherCampus" 
-      WHERE "teacherId" = ${teacherId} AND "campusId" = ${campusId}
-    `;
+    const relationship = await this.db.teacherCampus.findUnique({
+      where: {
+        teacherId_campusId: {
+          teacherId,
+          campusId
+        }
+      }
+    });
     
-    if (!Array.isArray(relationship) || relationship.length === 0) {
+    if (!relationship) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Teacher is not assigned to this campus"
@@ -205,10 +227,14 @@ export class CampusTeacherService {
     }
     
     // Delete the relationship
-    await this.db.$executeRaw`
-      DELETE FROM "TeacherCampus" 
-      WHERE "teacherId" = ${teacherId} AND "campusId" = ${campusId}
-    `;
+    await this.db.teacherCampus.delete({
+      where: {
+        teacherId_campusId: {
+          teacherId,
+          campusId
+        }
+      }
+    });
     
     return { success: true };
   }
@@ -244,57 +270,62 @@ export class CampusTeacherService {
       });
     }
     
-    // Get all teachers for this campus using raw query
-    const statusCondition = includeInactive ? '' : ` AND tc."status" = 'ACTIVE'`;
-    const teacherCampuses = await this.db.$queryRaw<any[]>`
-      SELECT 
-        tc."teacherId", tc."status", tc."isPrimary", tc."joinedAt",
-        tp."id" as "teacherId", tp."teacherType", tp."specialization",
-        u."id" as "userId", u."name", u."email"
-      FROM "TeacherCampus" tc
-      JOIN "TeacherProfile" tp ON tc."teacherId" = tp."id"
-      JOIN "User" u ON tp."userId" = u."id"
-      WHERE tc."campusId" = ${campusId} ${Prisma.raw(statusCondition)}
-    `;
+    // Get all teachers for this campus
+    const teacherCampuses = await this.db.teacherCampus.findMany({
+      where: {
+        campusId,
+        status: includeInactive ? undefined : Status.ACTIVE
+      },
+      include: {
+        teacher: {
+          include: {
+            user: true
+          }
+        }
+      }
+    });
     
     // Get classes for each teacher
     const result: TeacherWithClasses[] = [];
     
     for (const tc of teacherCampuses) {
       // Get classes and subjects for this teacher
-      const teacherClasses = await this.db.$queryRaw<any[]>`
-        SELECT 
-          tc.id as "teacherClassId",
-          c.id as "classId", c.name as "className",
-          cg.id as "classGroupId", cg.name as "classGroupName",
-          s.id as "subjectId", s.name as "subjectName"
-        FROM "TeacherClass" tc
-        JOIN "Class" c ON tc."classId" = c.id
-        JOIN "ClassGroup" cg ON c."classGroupId" = cg.id
-        LEFT JOIN "Subject" s ON s.id = tc."subjectId"
-        WHERE tc."teacherId" = ${tc.teacherId}
-        AND c."campusId" = ${campusId}
-      `;
+      const teacherClasses = await this.db.teacherClass.findMany({
+        where: {
+          teacherId: tc.teacherId,
+          class: {
+            campusId
+          }
+        },
+        include: {
+          class: {
+            include: {
+              classGroup: true,
+              subject: true
+            }
+          }
+        }
+      });
       
       result.push({
         id: tc.teacherId,
-        name: tc.name,
-        email: tc.email,
+        name: tc.teacher.user.name,
+        email: tc.teacher.user.email,
         status: tc.status,
         isPrimary: tc.isPrimary,
         joinedAt: tc.joinedAt,
-        teacherType: tc.teacherType,
-        specialization: tc.specialization,
+        teacherType: tc.teacher.teacherType,
+        specialization: tc.teacher.specialization,
         classes: teacherClasses.map(c => ({
-          id: c.classId,
-          name: c.className,
+          id: c.class.id,
+          name: c.class.name,
           classGroup: {
-            id: c.classGroupId,
-            name: c.classGroupName
+            id: c.class.classGroupId,
+            name: c.class.classGroup.name
           },
           subject: {
-            id: c.subjectId,
-            name: c.subjectName
+            id: c.class.subjectId,
+            name: c.class.subject.name
           }
         }))
       });
@@ -320,21 +351,21 @@ export class CampusTeacherService {
       });
     }
     
-    // Get all campuses for this teacher using raw query
-    const statusCondition = includeInactive ? '' : ` AND tc."status" = 'ACTIVE'`;
-    const teacherCampuses = await this.db.$queryRaw<any[]>`
-      SELECT 
-        c."id", c."name",
-        tc."status", tc."isPrimary", tc."joinedAt", tc."campusId"
-      FROM "TeacherCampus" tc
-      JOIN "Campus" c ON tc."campusId" = c."id"
-      WHERE tc."teacherId" = ${teacherId} ${Prisma.raw(statusCondition)}
-    `;
+    // Get all campuses for this teacher
+    const teacherCampuses = await this.db.teacherCampus.findMany({
+      where: {
+        teacherId,
+        status: includeInactive ? undefined : Status.ACTIVE
+      },
+      include: {
+        campus: true
+      }
+    });
     
     // Map to a more usable format
     return teacherCampuses.map(tc => ({
-      id: tc.id,
-      name: tc.name,
+      id: tc.campus.id,
+      name: tc.campus.name,
       status: tc.status,
       isPrimary: tc.isPrimary,
       joinedAt: tc.joinedAt,
@@ -363,12 +394,16 @@ export class CampusTeacherService {
     }
     
     // Check if relationship exists
-    const relationship = await this.db.$queryRaw`
-      SELECT * FROM "TeacherCampus" 
-      WHERE "teacherId" = ${teacherId} AND "campusId" = ${campusId}
-    `;
+    const relationship = await this.db.teacherCampus.findUnique({
+      where: {
+        teacherId_campusId: {
+          teacherId,
+          campusId
+        }
+      }
+    });
     
-    if (!Array.isArray(relationship) || relationship.length === 0) {
+    if (!relationship) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Teacher is not assigned to this campus"
@@ -376,48 +411,46 @@ export class CampusTeacherService {
     }
     
     // Update the status
-    await this.db.$executeRaw`
-      UPDATE "TeacherCampus" 
-      SET "status" = ${status}, "updatedAt" = ${new Date()}
-      WHERE "teacherId" = ${teacherId} AND "campusId" = ${campusId}
-    `;
-    
-    // Get the updated relationship
-    const teacher = await this.db.teacherProfile.findUnique({
-      where: { id: teacherId },
+    const updatedRelationship = await this.db.teacherCampus.update({
+      where: {
+        teacherId_campusId: {
+          teacherId,
+          campusId
+        }
+      },
+      data: {
+        status,
+        updatedAt: new Date()
+      },
       include: {
-        user: true
+        campus: true,
+        teacher: {
+          include: {
+            user: true
+          }
+        }
       }
     });
     
-    const campus = await this.db.campus.findUnique({
-      where: { id: campusId }
-    });
-    
-    if (!teacher || !campus) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to retrieve updated relationship"
-      });
-    }
-    
-    // Return the updated relationship
     return {
-      teacherId,
-      campusId,
-      status,
-      isPrimary: (relationship[0] as any).isPrimary,
-      joinedAt: (relationship[0] as any).joinedAt,
+      id: updatedRelationship.id,
+      teacherId: updatedRelationship.teacherId,
+      campusId: updatedRelationship.campusId,
+      isPrimary: updatedRelationship.isPrimary,
+      status: updatedRelationship.status,
+      joinedAt: updatedRelationship.joinedAt,
+      createdAt: updatedRelationship.createdAt,
+      updatedAt: updatedRelationship.updatedAt,
       campus: {
-        id: campus.id,
-        name: campus.name
+        id: updatedRelationship.campus.id,
+        name: updatedRelationship.campus.name
       },
       teacher: {
-        id: teacher.id,
+        id: updatedRelationship.teacher.id,
         user: {
-          id: teacher.user.id,
-          name: teacher.user.name,
-          email: teacher.user.email
+          id: updatedRelationship.teacher.user.id,
+          name: updatedRelationship.teacher.user.name,
+          email: updatedRelationship.teacher.user.email
         }
       }
     };
@@ -428,71 +461,85 @@ export class CampusTeacherService {
     teacherId: string,
     campusId: string
   ): Promise<TeacherCampusAssignment> {
-    // Check if relationship exists
-    const relationship = await this.db.$queryRaw`
-      SELECT * FROM "TeacherCampus" 
-      WHERE "teacherId" = ${teacherId} AND "campusId" = ${campusId}
-    `;
-    
-    if (!Array.isArray(relationship) || relationship.length === 0) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Teacher is not assigned to this campus"
+    try {
+      // Check if relationship exists
+      const existingAssignment = await this.db.teacherCampus.findUnique({
+        where: {
+          teacherId_campusId: {
+            teacherId,
+            campusId
+          }
+        }
       });
-    }
-    
-    // Unset any existing primary campus
-    await this.db.$executeRaw`
-      UPDATE "TeacherCampus" 
-      SET "isPrimary" = false, "updatedAt" = ${new Date()}
-      WHERE "teacherId" = ${teacherId} AND "isPrimary" = true
-    `;
-    
-    // Set this campus as primary
-    await this.db.$executeRaw`
-      UPDATE "TeacherCampus" 
-      SET "isPrimary" = true, "updatedAt" = ${new Date()}
-      WHERE "teacherId" = ${teacherId} AND "campusId" = ${campusId}
-    `;
-    
-    // Get the updated relationship
-    const teacher = await this.db.teacherProfile.findUnique({
-      where: { id: teacherId },
-      include: {
-        user: true
+      
+      if (!existingAssignment) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Teacher is not assigned to this campus"
+        });
       }
-    });
-    
-    const campus = await this.db.campus.findUnique({
-      where: { id: campusId }
-    });
-    
-    if (!teacher || !campus) {
+      
+      // Unset any existing primary campus
+      await this.db.teacherCampus.updateMany({
+        where: {
+          teacherId,
+          isPrimary: true
+        },
+        data: {
+          isPrimary: false
+        }
+      });
+      
+      // Set this campus as primary
+      const updatedAssignment = await this.db.teacherCampus.update({
+        where: {
+          teacherId_campusId: {
+            teacherId,
+            campusId
+          }
+        },
+        data: {
+          isPrimary: true
+        },
+        include: {
+          campus: true,
+          teacher: {
+            include: {
+              user: true
+            }
+          }
+        }
+      });
+      
+      return {
+        id: updatedAssignment.id,
+        teacherId: updatedAssignment.teacherId,
+        campusId: updatedAssignment.campusId,
+        isPrimary: updatedAssignment.isPrimary,
+        status: updatedAssignment.status,
+        joinedAt: updatedAssignment.joinedAt,
+        createdAt: updatedAssignment.createdAt,
+        updatedAt: updatedAssignment.updatedAt,
+        campus: {
+          id: updatedAssignment.campus.id,
+          name: updatedAssignment.campus.name
+        },
+        teacher: {
+          id: updatedAssignment.teacher.id,
+          user: {
+            id: updatedAssignment.teacher.user.id,
+            name: updatedAssignment.teacher.user.name,
+            email: updatedAssignment.teacher.user.email
+          }
+        }
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to retrieve updated relationship"
+        message: "Failed to set primary campus",
+        cause: error
       });
     }
-    
-    // Return the updated relationship
-    return {
-      teacherId,
-      campusId,
-      status: (relationship[0] as any).status,
-      isPrimary: true,
-      joinedAt: (relationship[0] as any).joinedAt,
-      campus: {
-        id: campus.id,
-        name: campus.name
-      },
-      teacher: {
-        id: teacher.id,
-        user: {
-          id: teacher.user.id,
-          name: teacher.user.name,
-          email: teacher.user.email
-        }
-      }
-    };
   }
 } 

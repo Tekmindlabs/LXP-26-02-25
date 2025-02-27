@@ -29,20 +29,25 @@ interface SearchFilters {
   search: string;
   subjectId?: string;
   classId?: string;
-  status?: Status | "ALL" | undefined;
+  status?: Status;
+  campusId?: string;
 }
 
+interface TeacherManagementProps {
+  role: string;
+  campusId?: string;
+  campusName?: string;
+}
 
-
-export const TeacherManagement = ({ role }: { role: string }) => {
+export const TeacherManagement = ({ role, campusId, campusName }: TeacherManagementProps) => {
   const router = useRouter();
   const [filters, setFilters] = useState<SearchFilters>({
     search: "",
     subjectId: "ALL",
     classId: "ALL",
-    status: undefined
+    status: undefined,
+    campusId: campusId
   });
-
 
   // Process filters before making API calls
   const processedFilters = {
@@ -50,16 +55,19 @@ export const TeacherManagement = ({ role }: { role: string }) => {
     subjectId: filters.subjectId === "ALL" ? undefined : filters.subjectId,
     classId: filters.classId === "ALL" ? undefined : filters.classId,
     status: filters.status === "ALL" ? undefined : filters.status,
+    campusId: filters.campusId
   };
 
   // API queries with proper typing
-  const { data: apiTeachers, isLoading } = api.teacher.searchTeachers.useQuery(processedFilters);
-  const teachers = apiTeachers as Teacher[] | undefined;
-  const { data: subjects } = api.subject.searchSubjects.useQuery({});
-  const { data: classes } = api.class.searchClasses.useQuery({});
+  const { data: teachers, isLoading } = api.teacher.searchTeachers.useQuery(processedFilters);
+  const { data: subjects } = api.subject.searchSubjects.useQuery({
+    campusId: campusId
+  });
+  const { data: classes } = api.class.searchClasses.useQuery({
+    campusId: campusId
+  });
 
   if (isLoading) {
-
     return <div>Loading...</div>;
   }
 
@@ -67,12 +75,14 @@ export const TeacherManagement = ({ role }: { role: string }) => {
     <div className="space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Teacher Management</CardTitle>
+          <CardTitle>
+            {campusName ? `${campusName} - Teachers` : 'Teacher Management'}
+          </CardTitle>
           <div className="flex items-center gap-4">
-          <BulkTeacherUpload />
-          <Button onClick={() => router.push(`/dashboard/${role}/teacher/create`)}>
-            Add Teacher
-          </Button>
+            {!campusId && <BulkTeacherUpload />}
+            <Button onClick={() => router.push(`/dashboard/${role}/teacher/create${campusId ? `?campusId=${campusId}` : ''}`)}>
+              Add Teacher
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -92,8 +102,8 @@ export const TeacherManagement = ({ role }: { role: string }) => {
                   <SelectValue placeholder="Filter by Subject" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="ALL">All Subjects</SelectItem>
-                  {subjects?.map((subject: Subject) => (
+                  <SelectItem value="ALL">All Subjects</SelectItem>
+                  {subjects?.map((subject) => (
                     <SelectItem key={subject.id} value={subject.id}>
                       {subject.name}
                     </SelectItem>
@@ -108,8 +118,8 @@ export const TeacherManagement = ({ role }: { role: string }) => {
                   <SelectValue placeholder="Filter by Class" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="ALL">All Classes</SelectItem>
-                  {classes?.map((cls: Class) => (
+                  <SelectItem value="ALL">All Classes</SelectItem>
+                  {classes?.map((cls) => (
                     <SelectItem key={cls.id} value={cls.id}>
                       {cls.name}
                     </SelectItem>
@@ -117,14 +127,14 @@ export const TeacherManagement = ({ role }: { role: string }) => {
                 </SelectContent>
               </Select>
               <Select
-                value={filters.status}
-                onValueChange={(value) => setFilters({ ...filters, status: value as Status })}
+                value={filters.status || "ALL"}
+                onValueChange={(value) => setFilters({ ...filters, status: value === "ALL" ? undefined : value as Status })}
               >
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="ALL">All Status</SelectItem>
+                  <SelectItem value="ALL">All Status</SelectItem>
                   {Object.values(Status).map((status) => (
                     <SelectItem key={status} value={status}>
                       {status}
@@ -135,11 +145,11 @@ export const TeacherManagement = ({ role }: { role: string }) => {
             </div>
           </div>
 
-            <TeacherList
-              teachers={teachers || []}
-              onSelect={(id) => router.push(`/dashboard/super-admin/teacher/${id}`)}
-              onEdit={(id) => router.push(`/dashboard/super-admin/teacher/${id}/edit`)}
-            />
+          <TeacherList
+            teachers={teachers || []}
+            onSelect={(id) => router.push(`/dashboard/${role}/teacher/${id}`)}
+            onEdit={(id) => router.push(`/dashboard/${role}/teacher/${id}/edit${campusId ? `?campusId=${campusId}` : ''}`)}
+          />
 
         </CardContent>
       </Card>

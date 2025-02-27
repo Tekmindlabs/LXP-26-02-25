@@ -4,10 +4,35 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Status, TeacherType } from "@prisma/client";
-import { Teacher } from "@/types/user";
+
+interface Teacher {
+	id: string;
+	name: string | null;
+	email: string | null;
+	status: Status;
+	teacher?: {
+		teacherType: TeacherType;
+		specialization: string | null;
+		campuses?: Array<{
+			campus: {
+				id: string;
+				name: string;
+			};
+			isPrimary: boolean;
+		}>;
+		subjects?: Array<{
+			name: string;
+		}>;
+		classes?: Array<{
+			name: string;
+			classGroup: {
+				name: string;
+			};
+		}>;
+	};
+}
 
 interface TeacherListProps {
-
 	teachers: Teacher[];
 	onSelect: (id: string) => void;
 	onEdit: (id: string) => void;
@@ -23,7 +48,7 @@ export const TeacherList = ({ teachers, onSelect, onEdit }: TeacherListProps) =>
 						<TableHead>Email</TableHead>
 						<TableHead>Teacher Type</TableHead>
 						<TableHead>Specialization</TableHead>
-						<TableHead>Availability</TableHead>
+						<TableHead>Campus</TableHead>
 						<TableHead>Subjects</TableHead>
 						<TableHead>Classes</TableHead>
 						<TableHead>Status</TableHead>
@@ -37,17 +62,28 @@ export const TeacherList = ({ teachers, onSelect, onEdit }: TeacherListProps) =>
 							<TableCell>{teacher.email || '-'}</TableCell>
 							<TableCell>
 								<Badge variant="outline">
-									{teacher.teacherProfile?.teacherType || 'SUBJECT'}
+									{teacher.teacher?.teacherType || 'SUBJECT'}
 								</Badge>
 							</TableCell>
-							<TableCell>{teacher.teacherProfile?.specialization || '-'}</TableCell>
-							<TableCell>{teacher.teacherProfile?.availability || '-'}</TableCell>
+							<TableCell>{teacher.teacher?.specialization || '-'}</TableCell>
 							<TableCell>
-								{teacher.teacherProfile?.subjects.map(s => s.subject.name).join(", ") || '-'}
+								{teacher.teacher?.campuses?.map(tc => (
+									<Badge 
+										key={tc.campus.id} 
+										variant={tc.isPrimary ? "default" : "outline"}
+										className="mr-1"
+									>
+										{tc.campus.name}
+										{tc.isPrimary && " (Primary)"}
+									</Badge>
+								)) || '-'}
 							</TableCell>
 							<TableCell>
-								{teacher.teacherProfile?.classes.map(c => 
-									`${c.class.name} (${c.class.classGroup.name})`
+								{teacher.teacher?.subjects?.map(s => s.name).join(", ") || '-'}
+							</TableCell>
+							<TableCell>
+								{teacher.teacher?.classes?.map(c => 
+									`${c.name} (${c.classGroup.name})`
 								).join(", ") || '-'}
 							</TableCell>
 							<TableCell>

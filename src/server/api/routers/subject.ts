@@ -224,10 +224,10 @@ export const subjectRouter = createTRPCRouter({
 			teacherIds: z.array(z.string()).optional(),
 			search: z.string().optional(),
 			status: z.enum([Status.ACTIVE, Status.INACTIVE, Status.ARCHIVED]).optional(),
+			campusId: z.string().optional(),
 		}))
 		.query(async ({ ctx, input }) => {
-			const { search, classGroupIds, teacherIds, status } = input;
-
+			const { search, classGroupIds, teacherIds, status, campusId } = input;
 
 			return ctx.prisma.subject.findMany({
 				where: {
@@ -249,7 +249,14 @@ export const subjectRouter = createTRPCRouter({
 							some: { teacherId: { in: teacherIds } },
 						},
 					}),
-
+					...(campusId && {
+						classes: {
+							some: {
+								campusId,
+								status: Status.ACTIVE,
+							},
+						},
+					}),
 				},
 				include: {
 					classGroups: {
@@ -264,6 +271,17 @@ export const subjectRouter = createTRPCRouter({
 									user: true,
 								},
 							},
+						},
+					},
+					classes: {
+						where: {
+							...(campusId && {
+								campusId,
+								status: Status.ACTIVE,
+							}),
+						},
+						include: {
+							campus: true,
 						},
 					},
 				},

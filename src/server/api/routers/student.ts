@@ -69,121 +69,83 @@ export const studentRouter = createTRPCRouter({
 				}
 
 				// Check if parent email exists if provided
+				let parentId: string | undefined;
 				if (input.parentEmail) {
 					const existingParent = await ctx.prisma.user.findUnique({
-						where: { email: input.parentEmail }
+						where: { email: input.parentEmail },
+						include: { parent: true }
 					});
-					if (existingParent) {
-						throw new Error("Parent email already exists");
-					}
-				}
 
-				const studentPassword = generatePassword();
-				let parentData = null;
-				
-				// Create parent if parent info is provided
-				if (input.parentName && input.parentEmail) {
-					try {
+					if (existingParent) {
+						parentId = existingParent.parent?.id;
+					} else {
 						const parentPassword = generatePassword();
-						const parent = await ctx.prisma.user.create({
+						const newParent = await ctx.prisma.user.create({
 							data: {
 								name: input.parentName,
 								email: input.parentEmail,
 								password: parentPassword,
-								userType: "PARENT",
-								status: "ACTIVE",
-								parentProfile: {
-									create: {},
-								},
-								userRoles: {
-									create: {
-										role: {
-											connectOrCreate: {
-												where: { name: "PARENT" },
-												create: { name: "PARENT" }
-											}
-										}
-									}
+								userType: UserType.PARENT,
+								status: Status.ACTIVE,
+								parent: {
+									create: {}
 								}
 							},
 							include: {
-								parentProfile: true,
-								userRoles: {
-									include: {
-										role: true
-									}
-								}
-							},
+								parent: true
+							}
 						});
-						
-						parentData = {
-							...parent,
-							credentials: parentPassword
-						};
-					} catch (error) {
-						if (error instanceof Error) {
-							throw new Error(`Failed to create parent: ${error.message}`);
-						}
-						throw new Error("Failed to create parent");
+						parentId = newParent.parent?.id;
 					}
 				}
 
-				// Create student
-				try {
-					const student = await ctx.prisma.user.create({
-						data: {
-							name: input.name,
-							email: input.email,
-							password: studentPassword,
-							userType: "STUDENT",
-							status: "ACTIVE",
-							studentProfile: {
-								create: {
-									dateOfBirth: input.dateOfBirth,
-									classId: input.classId,
-									...(parentData?.parentProfile && { parentId: parentData.parentProfile.id }),
-								},
-							},
-							userRoles: {
-								create: {
-									role: {
-										connectOrCreate: {
-											where: { name: "STUDENT" },
-											create: { name: "STUDENT" }
+				const studentPassword = generatePassword();
+				const student = await ctx.prisma.user.create({
+					data: {
+						name: input.name,
+						email: input.email,
+						password: studentPassword,
+						userType: UserType.STUDENT,
+						status: Status.ACTIVE,
+						student: {
+							create: {
+								dateOfBirth: input.dateOfBirth,
+								classId: input.classId,
+								...(parentId && { parentId })
+							}
+						}
+					},
+					include: {
+						student: {
+							include: {
+								class: {
+									include: {
+										classGroup: {
+											include: {
+												program: true
+											}
 										}
 									}
+								},
+								parent: {
+									include: {
+										user: true
+									}
+								},
+								campuses: {
+									include: {
+										campus: true
+									}
 								}
 							}
-						},
-						include: {
-							studentProfile: true,
-							userRoles: {
-								include: {
-									role: true
-								}
-							}
-						},
-					});
-
-					return {
-						...student,
-						studentProfile: {
-							...student.studentProfile,
-							credentials: studentPassword,
-						},
-						userRoles: student.userRoles,
-						parentProfile: parentData ? {
-							...parentData.parentProfile,
-							credentials: parentData.credentials,
-							userRoles: parentData.userRoles
-						} : null
-					};
-				} catch (error) {
-					if (error instanceof Error) {
-						throw new Error(`Failed to create student: ${error.message}`);
+						}
 					}
-					throw new Error("Failed to create student");
-				}
+				});
+
+				return {
+					...student,
+					credentials: studentPassword
+				};
 			} catch (error) {
 				if (error instanceof Error) {
 					throw new Error(error.message);
@@ -197,12 +159,24 @@ export const studentRouter = createTRPCRouter({
 			classId: z.string()
 		}))
 		.query(async ({ ctx, input }) => {
-			return ctx.prisma.studentProfile.findMany({
+			return ctx.prisma.user.findMany({
 				where: {
-					classId: input.classId
+					userType: UserType.STUDENT,
+					student: {
+						classId: input.classId
+					}
 				},
 				include: {
-					user: true
+					student: {
+						include: {
+							class: true,
+							parent: {
+								include: {
+									user: true
+								}
+							}
+						}
+					}
 				}
 			});
 		}),
@@ -234,7 +208,7 @@ export const studentRouter = createTRPCRouter({
 					data: {
 						name: input.name,
 						email: input.email,
-						studentProfile: {
+						student: {
 							update: {
 								dateOfBirth: input.dateOfBirth,
 								classId: input.classId,
@@ -242,7 +216,7 @@ export const studentRouter = createTRPCRouter({
 						},
 					},
 					include: {
-						studentProfile: {
+						student: {
 							include: {
 								class: {
 									include: {
@@ -263,8 +237,8 @@ export const studentRouter = createTRPCRouter({
 					},
 				});
 
-				if (!student.studentProfile) {
-					throw new Error("Student profile not found");
+				if (!student.student) {
+					throw new Error("Student not found");
 				}
 
 				return student;
@@ -290,7 +264,7 @@ export const studentRouter = createTRPCRouter({
 			return ctx.prisma.user.findUnique({
 				where: { id: input },
 				include: {
-					studentProfile: {
+					student: {
 						include: {
 							class: {
 								include: {
@@ -332,7 +306,8 @@ export const studentRouter = createTRPCRouter({
 								{ email: { contains: search, mode: 'insensitive' } },
 							],
 						}),
-						studentProfile: {
+						...(status && { status }),
+						student: {
 							...(classId && { classId }),
 							...(programId && {
 								class: {
@@ -342,10 +317,9 @@ export const studentRouter = createTRPCRouter({
 								},
 							}),
 						},
-						...(status && { status }),
 					},
 					include: {
-						studentProfile: {
+						student: {
 							include: {
 								class: {
 									include: {
@@ -359,6 +333,11 @@ export const studentRouter = createTRPCRouter({
 								parent: {
 									include: {
 										user: true,
+									},
+								},
+								campuses: {
+									include: {
+										campus: true,
 									},
 								},
 							},
@@ -376,41 +355,7 @@ export const studentRouter = createTRPCRouter({
 					});
 				}
 
-				return students.map(student => {
-					if (!student.studentProfile) {
-						throw new TRPCError({
-							code: 'NOT_FOUND',
-							message: `Student ${student.id} has no profile`,
-						});
-					}
-					
-					return {
-						id: student.id,
-						name: student.name || '',
-						email: student.email || '',
-						status: student.status,
-						studentProfile: {
-							dateOfBirth: student.studentProfile.dateOfBirth,
-							class: student.studentProfile.class ? {
-								id: student.studentProfile.class.id,
-								name: student.studentProfile.class.name,
-								classGroup: {
-									id: student.studentProfile.class.classGroup.id,
-									name: student.studentProfile.class.classGroup.name,
-									program: {
-										id: student.studentProfile.class.classGroup.program.id,
-										name: student.studentProfile.class.classGroup.program.name,
-									},
-								},
-							} : null,
-							parent: student.studentProfile.parent ? {
-								user: {
-									name: student.studentProfile.parent.user.name || '',
-								},
-							} : null,
-						},
-					};
-				});
+				return students;
 			} catch (error) {
 				console.error("Error in searchStudents:", error);
 				if (error instanceof TRPCError) {
@@ -430,7 +375,7 @@ export const studentRouter = createTRPCRouter({
 			classId: z.string()
 		}))
 		.mutation(async ({ ctx, input }) => {
-			return ctx.prisma.studentProfile.update({
+			return ctx.prisma.student.update({
 				where: { userId: input.studentId },
 				data: { classId: input.classId },
 				include: {
@@ -455,7 +400,7 @@ export const studentRouter = createTRPCRouter({
 			const student = await ctx.prisma.user.findUnique({
 				where: { id: input.id },
 				include: {
-					studentProfile: {
+					student: {
 						include: {
 							class: {
 								include: {
@@ -471,12 +416,17 @@ export const studentRouter = createTRPCRouter({
 									user: true,
 								},
 							},
+							campuses: {
+								include: {
+									campus: true,
+								},
+							},
 						},
 					},
 				},
 			});
 
-			if (!student || !student.studentProfile) {
+			if (!student || !student.student) {
 				throw new Error("Student profile not found");
 			}
 
@@ -486,7 +436,7 @@ export const studentRouter = createTRPCRouter({
 	getStudentPerformance: protectedProcedure
 		.input(z.string())
 		.query(async ({ ctx, input }) => {
-			const student = await ctx.prisma.studentProfile.findUnique({
+			const student = await ctx.prisma.student.findUnique({
 				where: { userId: input },
 				include: {
 					class: {
@@ -498,6 +448,12 @@ export const studentRouter = createTRPCRouter({
 							},
 						},
 					},
+					activities: {
+						include: {
+							activity: true,
+						},
+					},
+					attendance: true,
 				},
 			});
 
@@ -505,28 +461,18 @@ export const studentRouter = createTRPCRouter({
 				throw new Error("Student not found");
 			}
 
-			// Get activities and attendance separately
-			const activities = await ctx.prisma.classActivitySubmission.findMany({
-				where: { studentId: input },
-				include: {
-					activity: true,
-				},
-			}) as ActivitySubmission[];
-
-			const attendance = await ctx.prisma.attendance.findMany({
-				where: { studentId: student.id },
-			});
-
+			const activities = student.activities;
+			const attendance = student.attendance;
 			const subjects = student.class?.classGroup?.subjects || [];
 
 			// Activity performance
 			const activityMetrics = {
 				total: activities.length,
-				completed: activities.filter((a: ActivitySubmission) => 
+				completed: activities.filter(a => 
 					a.status === 'SUBMITTED' || a.status === 'GRADED').length,
-				graded: activities.filter((a: ActivitySubmission) => 
+				graded: activities.filter(a => 
 					a.status === 'GRADED').length,
-				averageGrade: activities.reduce((acc: number, curr: ActivitySubmission) => 
+				averageGrade: activities.reduce((acc, curr) => 
 					acc + (curr.obtainedMarks || 0), 0) / activities.length || 0,
 			};
 
@@ -541,8 +487,8 @@ export const studentRouter = createTRPCRouter({
 			};
 
 			// Subject-wise performance
-			const subjectPerformance = subjects.map((subject: Subject) => {
-				const subjectActivities = activities.filter((a: ActivitySubmission) => 
+			const subjectPerformance = subjects.map(subject => {
+				const subjectActivities = activities.filter(a => 
 					a.activity.subjectId === subject.id && 
 					a.activity.type === 'CLASS_EXAM'
 				);
@@ -550,7 +496,7 @@ export const studentRouter = createTRPCRouter({
 				return {
 					subject: subject.name,
 					activities: subjectActivities.length,
-					averageGrade: subjectActivities.reduce((acc: number, curr: ActivitySubmission) => 
+					averageGrade: subjectActivities.reduce((acc, curr) => 
 						acc + (curr.obtainedMarks || 0), 0) / subjectActivities.length || 0,
 				};
 			});

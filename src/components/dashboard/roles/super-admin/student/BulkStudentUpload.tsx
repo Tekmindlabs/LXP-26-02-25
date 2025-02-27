@@ -24,7 +24,11 @@ interface BulkStudentData {
 	status: Status;
 }
 
-export const BulkStudentUpload = () => {
+interface BulkStudentUploadProps {
+	onSuccess?: () => void;
+}
+
+export const BulkStudentUpload: React.FC<BulkStudentUploadProps> = ({ onSuccess }) => {
 	const [isOpen, setIsOpen] = useState(false);
 	const [file, setFile] = useState<File | null>(null);
 	const [uploadProgress, setUploadProgress] = useState(0);
@@ -46,6 +50,9 @@ export const BulkStudentUpload = () => {
 			setIsOpen(false);
 			setFile(null);
 			setUploadProgress(0);
+			if (onSuccess) {
+				onSuccess();
+			}
 		},
 		onError: (error: { message: string }) => {
 			toast({

@@ -68,43 +68,22 @@ type TeacherFormValues = z.infer<typeof teacherFormSchema>;
 interface TeacherFormProps {
   initialData?: Partial<TeacherFormValues> & { campusId?: string };
   teacherId?: string;
-  classes?: Class[];
   isCreate?: boolean;
   onClose?: () => void;
+  onSuccess?: () => void;
 }
 
 export default function TeacherForm({
   initialData = {},
   teacherId,
-  classes = [],
   isCreate,
   onClose,
+  onSuccess,
 }: TeacherFormProps) {
   const router = useRouter();
   const params = useParams();
   const role = params.role as string;
   const [loading, setLoading] = useState(false);
-
-  // Get all campuses
-  const { data: campuses = [], isLoading: isLoadingCampuses } = api.campus.getAll.useQuery();
-
-  // Get subjects for the specific campus
-  const { data: campusSubjects = [], isLoading: isLoadingSubjects } = api.subject.getAll.useQuery(
-    undefined,
-    { enabled: !!initialData.campusId }
-  );
-
-  // Get teacher data if editing
-  const { data: teacherData, isLoading: isLoadingTeacher } = api.teacher.getById.useQuery(
-    teacherId!,
-    { enabled: !!teacherId }
-  );
-
-  // Get teacher campuses if editing
-  const { data: teacherCampuses = [], isLoading: isLoadingTeacherCampuses } = api.teacher.getTeacherCampuses.useQuery(
-    { teacherId: teacherId! },
-    { enabled: !!teacherId }
-  );
 
   const form = useForm<TeacherFormValues>({
     resolver: zodResolver(teacherFormSchema),
@@ -121,27 +100,63 @@ export default function TeacherForm({
     },
   });
 
+  // Get all campuses
+  const { data: campuses = [], isLoading: isLoadingCampuses } = api.campus.getAll.useQuery();
+
+  // Get all subjects
+  const { data: subjects = [], isLoading: isLoadingSubjects } = api.subject.getAll.useQuery();
+
+  // Get teacher data if editing
+  const { data: teacherData, isLoading: isLoadingTeacher } = api.teacher.getById.useQuery(
+    teacherId!,
+    { enabled: !!teacherId }
+  );
+
+  // Get teacher campuses if editing
+  const { data: teacherCampuses = [], isLoading: isLoadingTeacherCampuses, refetch: refetchTeacherCampuses } = api.teacher.getTeacherCampuses.useQuery(
+    { teacherId: teacherId! },
+    { enabled: !!teacherId }
+  );
+
+  // Get selected campus IDs from form
+  const selectedCampusIds = form.watch("campusIds") || [];
+
+  // Get classes based on selected campuses
+  const { data: classes = [], isLoading: isLoadingClasses } = api.class.searchClasses.useQuery(
+    { campusIds: selectedCampusIds },
+    { enabled: selectedCampusIds.length > 0 }
+  );
+
   // Create teacher mutation
   const createTeacher = api.teacher.createTeacher.useMutation({
-    onSuccess: (data) => {
-      // If campuses are selected, assign them
-      if (form.getValues().campusIds?.length) {
-        const primaryCampusId = form.getValues().primaryCampusId;
+    onSuccess: async (data) => {
+      try {
+        // If campuses are selected, assign them
+        if (form.getValues().campusIds?.length) {
+          const primaryCampusId = form.getValues().primaryCampusId;
+          
+          // Assign each campus sequentially
+          for (const campusId of form.getValues().campusIds) {
+            await assignTeacherToCampus.mutateAsync({
+              teacherId: data.id,
+              campusId,
+              isPrimary: campusId === primaryCampusId
+            });
+          }
+        }
         
-        // Assign each campus
-        form.getValues().campusIds?.forEach((campusId) => {
-          assignTeacherToCampus.mutate({
-            teacherId: data.id,
-            campusId,
-            isPrimary: campusId === primaryCampusId
-          });
-        });
+        toast.success("Teacher created successfully");
+        setLoading(false);
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          router.push(`/dashboard/${role}/teacher`);
+        }
+      } catch (error) {
+        console.error("Error in campus assignments:", error);
+        toast.error("Teacher created but campus assignments failed");
+        setLoading(false);
       }
-      
-      toast.success("Teacher created successfully");
-      setLoading(false);
-      router.push(`/dashboard/${role}/teacher`);
-      router.refresh();
     },
     onError: (error: ApiError) => {
       toast.error(error.message);
@@ -151,46 +166,60 @@ export default function TeacherForm({
 
   // Update teacher mutation
   const updateTeacher = api.teacher.updateTeacher.useMutation({
-    onSuccess: (data) => {
-      // Handle campus assignments if needed
-      if (form.getValues().campusIds?.length) {
+    onSuccess: async (data) => {
+      try {
+        // Handle campus assignments if needed
+        const newCampusIds = form.getValues().campusIds || [];
         const primaryCampusId = form.getValues().primaryCampusId;
-        
-        // Assign each campus
-        form.getValues().campusIds?.forEach((campusId) => {
-          // Check if this campus is already assigned
-          const existingAssignment = teacherCampuses.find(tc => tc.campusId === campusId);
-          
-          if (!existingAssignment) {
-            assignTeacherToCampus.mutate({
-              teacherId: data.id,
-              campusId,
-              isPrimary: campusId === primaryCampusId
-            });
-          } else if (existingAssignment.isPrimary !== (campusId === primaryCampusId)) {
-            // Update primary status if it changed
-            setPrimaryCampus.mutate({
-              teacherId: data.id,
-              campusId
-            });
-          }
-        });
-        
-        // Remove campuses that were unselected
-        teacherCampuses.forEach(tc => {
-          if (!form.getValues().campusIds?.includes(tc.campusId)) {
-            removeTeacherFromCampus.mutate({
+        const currentCampusIds = teacherCampuses?.map(tc => tc.campusId) || [];
+
+        // Step 1: Handle removals first
+        for (const tc of teacherCampuses || []) {
+          if (!newCampusIds.includes(tc.campusId)) {
+            await removeTeacherFromCampus.mutateAsync({
               teacherId: data.id,
               campusId: tc.campusId
             });
           }
-        });
+        }
+
+        // Step 2: Handle new assignments
+        for (const campusId of newCampusIds) {
+          if (!currentCampusIds.includes(campusId)) {
+            await assignTeacherToCampus.mutateAsync({
+              teacherId: data.id,
+              campusId,
+              isPrimary: campusId === primaryCampusId
+            });
+          }
+        }
+
+        // Step 3: Update primary campus if it has changed
+        if (primaryCampusId && newCampusIds.includes(primaryCampusId)) {
+          const currentPrimaryCampus = teacherCampuses?.find(tc => tc.isPrimary);
+          if (currentPrimaryCampus?.campusId !== primaryCampusId) {
+            await setPrimaryCampus.mutateAsync({
+              teacherId: data.id,
+              campusId: primaryCampusId
+            });
+          }
+        }
+
+        // Refetch teacher data to ensure UI is updated
+        await refetchTeacherCampuses();
+        
+        toast.success("Teacher updated successfully");
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          router.push(`/dashboard/${role}/teacher`);
+        }
+      } catch (error) {
+        console.error("Error in campus assignments:", error);
+        toast.error("Some campus assignments could not be completed. Please check and try again.");
+      } finally {
+        setLoading(false);
       }
-      
-      toast.success("Teacher updated successfully");
-      setLoading(false);
-      router.push(`/dashboard/${role}/teacher`);
-      router.refresh();
     },
     onError: (error: ApiError) => {
       toast.error(error.message);
@@ -199,23 +228,9 @@ export default function TeacherForm({
   });
 
   // Campus assignment mutations
-  const assignTeacherToCampus = api.campus.assignTeacherToCampus.useMutation({
-    onError: (error) => {
-      toast.error(`Failed to assign teacher to campus: ${error.message}`);
-    }
-  });
-
-  const removeTeacherFromCampus = api.campus.removeTeacherFromCampus.useMutation({
-    onError: (error) => {
-      toast.error(`Failed to remove teacher from campus: ${error.message}`);
-    }
-  });
-
-  const setPrimaryCampus = api.campus.setPrimaryCampus.useMutation({
-    onError: (error) => {
-      toast.error(`Failed to set primary campus: ${error.message}`);
-    }
-  });
+  const assignTeacherToCampus = api.campus.assignTeacherToCampus.useMutation();
+  const removeTeacherFromCampus = api.campus.removeTeacherFromCampus.useMutation();
+  const setPrimaryCampus = api.campus.setPrimaryCampus.useMutation();
 
   // Set form default values when teacher data is loaded
   useEffect(() => {
@@ -227,10 +242,10 @@ export default function TeacherForm({
         name: teacherData.name || "",
         email: teacherData.email || "",
         phoneNumber: teacherData.phoneNumber || "",
-        teacherType: teacherData.teacherProfile?.teacherType || TeacherType.SUBJECT,
-        specialization: teacherData.teacherProfile?.specialization || "",
-        subjectIds: teacherData.teacherProfile?.subjects?.map((s: { id: string }) => s.id) ?? [],
-        classIds: teacherData.teacherProfile?.classes?.map((c: { id: string }) => c.id) ?? [],
+        teacherType: teacherData.teacher?.teacherType || TeacherType.SUBJECT,
+        specialization: teacherData.teacher?.specialization || "",
+        subjectIds: teacherData.teacher?.subjects?.map(s => s.id) ?? [],
+        classIds: teacherData.teacher?.classes?.map(c => c.id) ?? [],
         campusIds: campusIds,
         primaryCampusId: primaryCampus?.campusId || "",
       });
@@ -240,10 +255,20 @@ export default function TeacherForm({
   const onSubmit = async (data: TeacherFormValues) => {
     try {
       setLoading(true);
+      const formData = {
+        ...data,
+        teacherType: data.teacherType || TeacherType.SUBJECT,
+        subjectIds: data.subjectIds || [],
+        classIds: data.classIds || [],
+      };
+
       if (isCreate) {
-        await createTeacher.mutateAsync(data);
+        await createTeacher.mutateAsync(formData);
       } else if (teacherId) {
-        await updateTeacher.mutateAsync({ ...data, id: teacherId });
+        await updateTeacher.mutateAsync({
+          ...formData,
+          id: teacherId,
+        });
       }
     } catch (error) {
       const apiError = error as ApiError;
@@ -314,7 +339,11 @@ export default function TeacherForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Teacher Type</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select 
+                  onValueChange={field.onChange} 
+                  defaultValue={field.value}
+                  value={field.value}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select teacher type" />
@@ -354,13 +383,19 @@ export default function TeacherForm({
                   <MultiSelect<string>
                     value={field.value ?? []}
                     options={
-                      campusSubjects?.map((subject: Subject) => ({
+                      subjects?.map((subject: Subject) => ({
                         label: subject.name,
                         value: subject.id,
                       })) ?? []
                     }
                     onChange={field.onChange}
-                    placeholder="Select subjects"
+                    placeholder={
+                      isLoadingSubjects
+                        ? "Loading subjects..."
+                        : subjects?.length === 0
+                        ? "No subjects available"
+                        : "Select subjects"
+                    }
                     disabled={isLoadingSubjects}
                   />
                 </FormControl>
@@ -380,15 +415,31 @@ export default function TeacherForm({
                     <MultiSelect<string>
                       value={field.value ?? []}
                       options={
-                        classes?.map((class_: Class) => ({
-                          label: class_.name,
+                        classes?.map((class_) => ({
+                          label: `${class_.name} (${class_.classGroup?.name || 'No Group'})`,
                           value: class_.id,
                         })) ?? []
                       }
                       onChange={field.onChange}
-                      placeholder="Select classes"
+                      placeholder={
+                        selectedCampusIds.length === 0 
+                          ? "Please select campuses first"
+                          : isLoadingClasses
+                          ? "Loading classes..."
+                          : classes.length === 0
+                          ? "No classes available in selected campuses"
+                          : "Select classes"
+                      }
+                      disabled={selectedCampusIds.length === 0 || isLoadingClasses}
                     />
                   </FormControl>
+                  <FormDescription>
+                    {selectedCampusIds.length === 0 
+                      ? "You must select at least one campus before assigning classes" 
+                      : classes.length === 0 && !isLoadingClasses
+                      ? "No classes found in the selected campuses. Please create classes first."
+                      : "Select the classes this teacher will be teaching"}
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -420,22 +471,32 @@ export default function TeacherForm({
                         onChange={(values) => {
                           field.onChange(values);
                           
-                          // If primary campus is removed, reset it
-                          if (form.getValues().primaryCampusId && !values.includes(form.getValues().primaryCampusId)) {
-                            form.setValue("primaryCampusId", values[0] || "");
-                          }
-                          
-                          // If no primary campus is set and we have campuses, set the first one as primary
-                          if ((!form.getValues().primaryCampusId || form.getValues().primaryCampusId === "") && values.length > 0) {
+                          // Handle primary campus changes
+                          const currentPrimaryCampusId = form.getValues().primaryCampusId;
+                          if (values.length === 0) {
+                            // If no campuses selected, clear primary campus
+                            form.setValue("primaryCampusId", "");
+                          } else if (!values.includes(currentPrimaryCampusId)) {
+                            // If current primary campus is not in selection, set first campus as primary
                             form.setValue("primaryCampusId", values[0]);
                           }
                         }}
-                        placeholder="Select campuses"
+                        placeholder={
+                          isLoadingCampuses
+                            ? "Loading campuses..."
+                            : campuses.length === 0
+                            ? "No campuses available"
+                            : "Select campuses"
+                        }
                         disabled={isLoadingCampuses}
                       />
                     </FormControl>
                     <FormDescription>
-                      Select the campuses where this teacher will be assigned
+                      {isLoadingCampuses
+                        ? "Loading available campuses..."
+                        : campuses.length === 0
+                        ? "No campuses are available. Please create campuses first."
+                        : "Select the campuses where this teacher will be assigned"}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

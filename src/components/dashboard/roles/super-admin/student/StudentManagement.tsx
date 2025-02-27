@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Status } from "@prisma/client";
+import { Status, Program as PrismaProgram } from "@prisma/client";
 import { api } from "@/utils/api";
 import { StudentList } from "./StudentList";
 import { StudentForm } from "./StudentForm";
@@ -14,6 +14,13 @@ import { StudentDetails } from "./StudentDetails";
 import { BulkStudentUpload } from "./BulkStudentUpload";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ErrorDisplay } from "@/components/ui/error-display";
+import { useDebounce } from "@/hooks/use-debounce";
+import type { StudentProfile } from "@/types/student";
+import type { User } from "@/types/user";
+
+interface Program extends PrismaProgram {
+	name: string;
+}
 
 interface SearchFilters {
 	search: string;
@@ -22,15 +29,55 @@ interface SearchFilters {
 	status?: Status;
 }
 
+interface Student {
+	id: string;
+	name: string | null;
+	email: string | null;
+	status: Status;
+	studentProfile: {
+		id: string;
+		userId: string;
+		dateOfBirth: Date;
+		class?: {
+			id: string;
+			name: string;
+			classGroup: {
+				id: string;
+				name: string;
+				program: {
+					id: string;
+					name: string;
+				};
+			};
+		};
+		parent?: {
+			id: string;
+			user: {
+				id: string;
+				name: string | null;
+			};
+		};
+	};
+}
+
 export const StudentManagement = () => {
 	const router = useRouter();
 	const params = useParams();
 	const role = params.role as string;
 	const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 	const [showDetails, setShowDetails] = useState(false);
+	const [searchInput, setSearchInput] = useState("");
 	const [filters, setFilters] = useState<SearchFilters>({
 		search: "",
 	});
+
+	// Debounce search input
+	const debouncedSearch = useDebounce(searchInput, 300);
+
+	// Update filters when debounced search changes
+	useEffect(() => {
+		setFilters(prev => ({ ...prev, search: debouncedSearch }));
+	}, [debouncedSearch]);
 
 	const {
 		data: studentsData,
@@ -51,7 +98,7 @@ export const StudentManagement = () => {
 	});
 
 	const {
-		data: programs,
+		data: programsData,
 		isLoading: isLoadingPrograms
 	} = api.program.getAll.useQuery({
 		page: 1,
@@ -68,37 +115,51 @@ export const StudentManagement = () => {
 	}
 
 	if (studentsError) {
-		return <ErrorDisplay error={studentsError} onRetry={refetchStudents} />;
+		return <ErrorDisplay 
+			error={new Error(studentsError.message || "Failed to load students")} 
+			onRetry={refetchStudents} 
+		/>;
 	}
+
+	const handleFilterChange = (key: keyof SearchFilters, value: string) => {
+		setFilters(prev => ({
+			...prev,
+			[key]: value === "ALL" ? undefined : value
+		}));
+	};
 
 	const students = studentsData?.map(student => ({
 		id: student.id,
-		name: student.name,
-		email: student.email,
+		name: student.name || '',
+		email: student.email || '',
 		status: student.status,
 		studentProfile: {
-			dateOfBirth: student.studentProfile.dateOfBirth,
-			class: student.studentProfile.class ? {
-				id: student.studentProfile.class.id,
-				name: student.studentProfile.class.name,
+			id: student.student?.id || '',
+			userId: student.id,
+			dateOfBirth: student.student?.dateOfBirth || new Date(),
+			class: student.student?.class ? {
+				id: student.student.class.id,
+				name: student.student.class.name,
 				classGroup: {
-					id: student.studentProfile.class.classGroup.id,
-					name: student.studentProfile.class.classGroup.name,
+					id: student.student.class.classGroup.id,
+					name: student.student.class.classGroup.name,
 					program: {
-						id: student.studentProfile.class.classGroup.program.id,
-						name: student.studentProfile.class.classGroup.program.name
+						id: student.student.class.classGroup.program.id,
+						name: student.student.class.classGroup.program.name
 					}
 				}
-			} : null,
-			parent: student.studentProfile.parent ? {
+			} : undefined,
+			parent: student.student?.parent ? {
+				id: student.student.parent.id,
 				user: {
-					name: student.studentProfile.parent.user.name
+					id: student.student.parent.user.id,
+					name: student.student.parent.user.name
 				}
-			} : null,
-			attendance: [],
-			activities: []
+			} : undefined
 		}
 	})) || [];
+
+	const programs = programsData?.programs || [];
 
 	return (
 		<div className="space-y-4">
@@ -106,7 +167,7 @@ export const StudentManagement = () => {
 				<CardHeader className="flex flex-row items-center justify-between">
 					<CardTitle>Student Management</CardTitle>
 					<div className="flex items-center gap-4">
-						<BulkStudentUpload onSuccess={refetchStudents} />
+						<BulkStudentUpload onSuccess={() => refetchStudents()} />
 						<Button onClick={() => router.push(`/dashboard/${role}/student/create`)}>
 							Enroll Student
 						</Button>
@@ -117,20 +178,20 @@ export const StudentManagement = () => {
 						<div className="flex space-x-4">
 							<Input
 								placeholder="Search students..."
-								value={filters.search}
-								onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+								value={searchInput}
+								onChange={(e) => setSearchInput(e.target.value)}
 								className="max-w-sm"
 							/>
 							<Select
 								value={filters.programId || "ALL"}
-								onValueChange={(value) => setFilters({ ...filters, programId: value === "ALL" ? undefined : value })}
+								onValueChange={(value) => handleFilterChange("programId", value)}
 							>
 								<SelectTrigger className="w-[200px]">
 									<SelectValue placeholder="Filter by Program" />
 								</SelectTrigger>
 								<SelectContent>
 									<SelectItem value="ALL">All Programs</SelectItem>
-									{programs?.programs?.map((program: any) => (
+									{programs.map((program) => (
 										<SelectItem key={program.id} value={program.id}>
 											{program.name}
 										</SelectItem>
@@ -139,7 +200,7 @@ export const StudentManagement = () => {
 							</Select>
 							<Select
 								value={filters.classId || "ALL"}
-								onValueChange={(value) => setFilters({ ...filters, classId: value === "ALL" ? undefined : value })}
+								onValueChange={(value) => handleFilterChange("classId", value)}
 							>
 								<SelectTrigger className="w-[200px]">
 									<SelectValue placeholder="Filter by Class" />
@@ -155,7 +216,7 @@ export const StudentManagement = () => {
 							</Select>
 							<Select
 								value={filters.status || "ALL"}
-								onValueChange={(value) => setFilters({ ...filters, status: value === "ALL" ? undefined : value as Status })}
+								onValueChange={(value) => handleFilterChange("status", value)}
 							>
 								<SelectTrigger className="w-[180px]">
 									<SelectValue placeholder="Status" />
@@ -196,7 +257,7 @@ export const StudentManagement = () => {
 										classes={classes || []}
 										onSuccess={() => {
 											setSelectedStudentId(null);
-											refetchStudents();
+											void refetchStudents();
 										}}
 									/>
 								)}

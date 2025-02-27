@@ -6,6 +6,7 @@ import { generatePassword } from "../../../utils/password";
 import { CampusTeacherService } from "../../services/CampusTeacherService";
 import { CampusUserService } from "../../services/CampusUserService";
 import { TRPCError } from "@trpc/server";
+import { TeacherService, teacherProfileSchema, teacherAssignmentSchema } from "../../services/TeacherService";
 
 interface WeeklyHours {
 	dayName: string;
@@ -62,109 +63,45 @@ export const teacherRouter = createTRPCRouter({
 			primaryCampusId: z.string().optional(),
 		}))
 		.mutation(async ({ ctx, input }) => {
-			const {
-				name,
-				email,
-				phoneNumber,
-				teacherType,
-				specialization,
-				subjectIds,
-				classIds,
-				campusIds,
-				primaryCampusId,
-			} = input;
-
-			const existingTeacher = await ctx.prisma.user.findFirst({
-				where: {
-					email,
-					userType: UserType.TEACHER,
+			const teacherService = new TeacherService(ctx.db);
+			
+			// Convert old format to new format
+			const teacherData = {
+				profile: {
+					userId: input.email, // Will be replaced with actual user ID after user creation
+					teacherType: input.teacherType,
+					specialization: input.specialization,
 				},
-			});
+				assignments: input.campusIds?.map(campusId => ({
+					campusId,
+					isPrimary: campusId === input.primaryCampusId,
+					status: Status.ACTIVE
+				})),
+				subjects: input.subjectIds,
+				classes: input.classIds
+			};
 
-			if (existingTeacher) {
-				throw new Error('Teacher with this email already exists');
-			}
-
-			const teacher = await ctx.prisma.user.create({
+			// First create the user
+			const user = await ctx.prisma.user.create({
 				data: {
-					name,
-					email,
-					phoneNumber,
+					name: input.name,
+					email: input.email,
+					phoneNumber: input.phoneNumber,
 					userType: UserType.TEACHER,
 					status: Status.ACTIVE,
-					teacherProfile: {
-						create: {
-							specialization,
-							teacherType,
-							...(subjectIds && subjectIds.length > 0 && {
-								subjects: {
-									create: subjectIds.map((subjectId) => ({
-										subject: {
-											connect: { id: subjectId },
-										},
-										status: Status.ACTIVE,
-									})),
-								},
-							}),
-							...(classIds && classIds.length > 0 && {
-								classes: {
-									create: classIds.map((classId) => ({
-										class: {
-											connect: { id: classId },
-										},
-										status: Status.ACTIVE,
-										isClassTeacher: teacherType === TeacherType.CLASS,
-									})),
-								},
-							}),
-							...(campusIds && campusIds.length > 0 && {
-								campuses: {
-									create: campusIds.map((campusId) => ({
-										campus: {
-											connect: { id: campusId },
-										},
-										status: Status.ACTIVE,
-										isPrimary: campusId === primaryCampusId,
-									})),
-								},
-							}),
-						},
-					},
-				},
-				include: {
-					teacherProfile: {
-						include: {
-							subjects: {
-								include: {
-									subject: true
-								}
-							},
-							classes: {
-								include: {
-									class: {
-										include: {
-											classGroup: true,
-											students: true,
-											teachers: {
-												include: {
-													teacher: true
-												}
-											}
-										}
-									}
-								}
-							},
-							campuses: {
-								include: {
-									campus: true
-								}
-							}
-						}
-					}
-				},
+				}
 			});
 
-			return teacher;
+			// Update the profile with correct user ID
+			teacherData.profile.userId = user.id;
+
+			// Create teacher profile and assignments
+			const profile = await teacherService.upsertTeacher(teacherData);
+
+			return {
+				...user,
+				teacherProfile: profile
+			};
 		}),
 
 	updateTeacher: protectedProcedure
@@ -180,101 +117,51 @@ export const teacherRouter = createTRPCRouter({
 			classIds: z.array(z.string()).optional(),
 		}))
 		.mutation(async ({ ctx, input }) => {
-			const { id, subjectIds = [], classIds = [], teacherType, ...updateData } = input;
-
-			const teacherProfile = await ctx.prisma.teacherProfile.findUnique({
-				where: { userId: id },
+			const teacherService = new TeacherService(ctx.db);
+			
+			// Get existing teacher profile
+			const existingProfile = await ctx.prisma.teacherProfile.findUnique({
+				where: { userId: input.id },
+				include: { user: true }
 			});
 
-			if (!teacherProfile) {
-				throw new Error("Teacher profile not found");
+			if (!existingProfile) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Teacher profile not found"
+				});
 			}
 
-			// Update teacher type if provided
-			if (teacherType) {
-				await ctx.prisma.teacherProfile.update({
-					where: { id: teacherProfile.id },
+			// Update user data if provided
+			if (input.name || input.email || input.phoneNumber) {
+				await ctx.prisma.user.update({
+					where: { id: input.id },
 					data: {
-						teacherType,
-					},
+						...(input.name && { name: input.name }),
+						...(input.email && { email: input.email }),
+						...(input.phoneNumber && { phoneNumber: input.phoneNumber }),
+					}
 				});
 			}
 
-			// Handle subject assignments
-			if (subjectIds.length > 0) {
-				await ctx.prisma.teacherSubject.deleteMany({
-					where: { teacherId: teacherProfile.id },
-				});
-
-				await ctx.prisma.teacherSubject.createMany({
-					data: subjectIds.map(subjectId => ({
-						teacherId: teacherProfile.id,
-						subjectId,
-						status: Status.ACTIVE,
-					})),
-				});
-			}
-
-			// Handle class assignments
-			if (classIds.length > 0) {
-				await ctx.prisma.teacherClass.deleteMany({
-					where: { teacherId: teacherProfile.id },
-				});
-
-				await ctx.prisma.teacherClass.createMany({
-					data: classIds.map(classId => ({
-						teacherId: teacherProfile.id,
-						classId,
-						status: Status.ACTIVE,
-						isClassTeacher: teacherType === TeacherType.CLASS,
-					})),
-				});
-			}
-
-			const userUpdateData: Prisma.UserUpdateInput = {
-				...(updateData.name && { name: updateData.name }),
-				...(updateData.email && { email: updateData.email }),
-				...(updateData.phoneNumber && { phoneNumber: updateData.phoneNumber }),
-				teacherProfile: {
-					update: {
-						...(updateData.specialization && { specialization: updateData.specialization }),
-						...(updateData.availability && { availability: updateData.availability }),
-					},
+			// Update teacher profile and assignments
+			const teacherData = {
+				profile: {
+					id: existingProfile.id,
+					userId: input.id,
+					teacherType: input.teacherType || existingProfile.teacherType,
+					specialization: input.specialization || existingProfile.specialization,
 				},
+				subjects: input.subjectIds,
+				classes: input.classIds
 			};
 
-			const updatedTeacher = await ctx.prisma.user.update({
-				where: { id },
-				data: userUpdateData,
-				include: {
-					teacherProfile: {
-						include: {
-							subjects: {
-								include: {
-									subject: true
-								}
-							},
-							classes: {
-								include: {
-									class: {
-										include: {
-											classGroup: true,
-											students: true,
-											teachers: {
-												include: {
-													teacher: true
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			});
+			const updatedProfile = await teacherService.upsertTeacher(teacherData);
 
-			return updatedTeacher;
+			return {
+				...existingProfile.user,
+				teacherProfile: updatedProfile
+			};
 		}),
 
 	deleteTeacher: protectedProcedure
@@ -426,8 +313,8 @@ export const teacherRouter = createTRPCRouter({
 													teacher: true
 												}
 											}
-										}
-									}
+										},
+									},
 								}
 							}
 						}
@@ -590,9 +477,10 @@ export const teacherRouter = createTRPCRouter({
 		.input(z.object({
 			search: z.string().optional(),
 			status: z.nativeEnum(Status).optional(),
+			campusId: z.string().optional(),
 		}))
 		.query(async ({ ctx, input }) => {
-			const { search, status } = input;
+			const { search, status, campusId } = input;
 
 			const teachers = await ctx.prisma.user.findMany({
 				where: {
@@ -603,6 +491,16 @@ export const teacherRouter = createTRPCRouter({
 							{ name: { contains: search, mode: 'insensitive' } },
 							{ email: { contains: search, mode: 'insensitive' } },
 						],
+					}),
+					...(campusId && {
+						teacherProfile: {
+							campuses: {
+								some: {
+									campusId,
+									status: Status.ACTIVE,
+								},
+							},
+						},
 					}),
 				},
 				include: {
@@ -620,6 +518,11 @@ export const teacherRouter = createTRPCRouter({
 											classGroup: true,
 										},
 									},
+								},
+							},
+							campuses: {
+								include: {
+									campus: true,
 								},
 							},
 						},
@@ -889,5 +792,36 @@ export const teacherRouter = createTRPCRouter({
 				console.error("Error in getTeacherCampuses:", error);
 				throw error;
 			}
+		}),
+
+	upsertTeacher: protectedProcedure
+		.input(z.object({
+			profile: teacherProfileSchema,
+			assignments: z.array(teacherAssignmentSchema).optional(),
+			subjects: z.array(z.string()).optional(),
+			classes: z.array(z.string()).optional(),
+		}))
+		.mutation(async ({ ctx, input }) => {
+			const teacherService = new TeacherService(ctx.db);
+			return await teacherService.upsertTeacher(input);
+		}),
+
+	getTeacherProfile: protectedProcedure
+		.input(z.object({
+			teacherId: z.string(),
+		}))
+		.query(async ({ ctx, input }) => {
+			const teacherService = new TeacherService(ctx.db);
+			return await teacherService.getTeacherProfile(input.teacherId);
+		}),
+
+	updateTeacherStatus: protectedProcedure
+		.input(z.object({
+			teacherId: z.string(),
+			status: z.nativeEnum(Status),
+		}))
+		.mutation(async ({ ctx, input }) => {
+			const teacherService = new TeacherService(ctx.db);
+			return await teacherService.updateTeacherStatus(input.teacherId, input.status);
 		}),
 });

@@ -3,16 +3,21 @@
 import { StudentForm } from "@/components/dashboard/roles/super-admin/student/StudentForm";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { api } from "@/utils/api";
 
-export default function CreateStudentPage() {
-  const params = useParams();
-  const role = params.role as string;
+interface PageProps {
+  params: {
+    role: string;
+  };
+}
+
+export default function CreateStudentPage({ params }: PageProps) {
+  const role = params.role;
   
-  const { data: classes, isLoading } = api.class.searchClasses.useQuery({});
+  const { data: classes, isLoading: isLoadingClasses } = api.class.searchClasses.useQuery({});
+  const { data: campuses, isLoading: isLoadingCampuses } = api.campus.getAll.useQuery();
   
-  if (isLoading) {
+  if (isLoadingClasses || isLoadingCampuses) {
     return <div>Loading...</div>;
   }
   
@@ -26,6 +31,7 @@ export default function CreateStudentPage() {
       </div>
       <StudentForm 
         classes={classes || []}
+        campuses={campuses || []}
         onSuccess={() => {}}
       />
     </div>
