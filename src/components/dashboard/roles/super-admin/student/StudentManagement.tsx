@@ -34,7 +34,50 @@ export const StudentManagement = () => {
 		search: "",
 	});
 
-	const { data: studentsData, isLoading } = api.student.searchStudents.useQuery(filters);
+	const { data: studentsData, isLoading, error } = api.student.searchStudents.useQuery(filters, {
+		retry: 1,
+		refetchOnWindowFocus: false,
+		onError: (error) => {
+			console.error("Error fetching students:", error);
+		}
+	});
+
+	const { data: classes, isLoading: isLoadingClasses } = api.class.searchClasses.useQuery({}, {
+		retry: 1,
+		refetchOnWindowFocus: false
+	});
+	
+	const { data: programs, isLoading: isLoadingPrograms } = api.program.getAll.useQuery({
+		page: 1,
+		pageSize: 10
+	}, {
+		retry: 1,
+		refetchOnWindowFocus: false
+	});
+
+	if (isLoading || isLoadingClasses || isLoadingPrograms) {
+		return (
+			<div className="flex items-center justify-center min-h-[200px]">
+				<div className="text-center">
+					<div className="text-lg font-semibold">Loading...</div>
+					<div className="text-sm text-muted-foreground">Please wait while we fetch the data</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (error) {
+		return (
+			<div className="flex items-center justify-center min-h-[200px]">
+				<div className="text-center">
+					<div className="text-lg font-semibold text-destructive">Error</div>
+					<div className="text-sm text-muted-foreground">
+						{error.message || "Failed to load students. Please try again later."}
+					</div>
+				</div>
+			</div>
+		);
+	}
 
 	const students = studentsData?.map(student => ({
 		id: student.id,
@@ -64,12 +107,6 @@ export const StudentManagement = () => {
 			activities: []
 		}
 	})) || [];
-
-	const { data: classes } = api.class.searchClasses.useQuery({});
-	const { data: programs } = api.program.getAll.useQuery({
-		page: 1,
-		pageSize: 10
-	});
 
 	if (isLoading) {
 		return <div>Loading...</div>;

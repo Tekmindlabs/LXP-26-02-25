@@ -317,89 +317,111 @@ export const studentRouter = createTRPCRouter({
 			search: z.string().optional(),
 			classId: z.string().optional(),
 			programId: z.string().optional(),
-			status: z.enum([Status.ACTIVE, Status.INACTIVE, Status.ARCHIVED]).optional(),
+			status: z.nativeEnum(Status).optional(),
 		}))
 		.query(async ({ ctx, input }) => {
-			const { search, classId, programId, status } = input;
+			try {
+				const { search, classId, programId, status } = input;
 
-			const students = await ctx.prisma.user.findMany({
-				where: {
-					userType: UserType.STUDENT,
-					...(search && {
-						OR: [
-							{ name: { contains: search, mode: 'insensitive' } },
-							{ email: { contains: search, mode: 'insensitive' } },
-						],
-					}),
-					studentProfile: {
-						...(classId && { classId }),
-						...(programId && {
-							class: {
-								classGroup: {
-									programId,
-								},
-							},
+				const students = await ctx.prisma.user.findMany({
+					where: {
+						userType: UserType.STUDENT,
+						...(search && {
+							OR: [
+								{ name: { contains: search, mode: 'insensitive' } },
+								{ email: { contains: search, mode: 'insensitive' } },
+							],
 						}),
-					},
-					...(status && { status }),
-				},
-				include: {
-					studentProfile: {
-						include: {
-							class: {
-								include: {
+						studentProfile: {
+							...(classId && { classId }),
+							...(programId && {
+								class: {
 									classGroup: {
-										include: {
-											program: true,
+										programId,
+									},
+								},
+							}),
+						},
+						...(status && { status }),
+					},
+					include: {
+						studentProfile: {
+							include: {
+								class: {
+									include: {
+										classGroup: {
+											include: {
+												program: true,
+											},
 										},
 									},
 								},
-							},
-							parent: {
-								include: {
-									user: true,
+								parent: {
+									include: {
+										user: true,
+									},
 								},
 							},
 						},
 					},
-				},
-				orderBy: {
-					name: 'asc',
-				},
-			});
-
-			return students.map(student => {
-				if (!student.studentProfile) {
-					throw new Error(`Student ${student.id} has no profile`);
-				}
-				
-				return {
-					id: student.id,
-					name: student.name || '',
-					email: student.email || '',
-					status: student.status,
-					studentProfile: {
-						dateOfBirth: student.studentProfile.dateOfBirth,
-						class: student.studentProfile.class ? {
-							id: student.studentProfile.class.id,
-							name: student.studentProfile.class.name,
-							classGroup: {
-								id: student.studentProfile.class.classGroup.id,
-								name: student.studentProfile.class.classGroup.name,
-								program: {
-									id: student.studentProfile.class.classGroup.program.id,
-									name: student.studentProfile.class.classGroup.program.name,
-								},
-							},
-						} : null,
-						parent: student.studentProfile.parent ? {
-							user: {
-								name: student.studentProfile.parent.user.name || '',
-							},
-						} : null,
+					orderBy: {
+						name: 'asc',
 					},
-				};
-			});
+				});
+
+				if (!students) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'No students found',
+					});
+				}
+
+				return students.map(student => {
+					if (!student.studentProfile) {
+						throw new TRPCError({
+							code: 'NOT_FOUND',
+							message: `Student ${student.id} has no profile`,
+						});
+					}
+					
+					return {
+						id: student.id,
+						name: student.name || '',
+						email: student.email || '',
+						status: student.status,
+						studentProfile: {
+							dateOfBirth: student.studentProfile.dateOfBirth,
+							class: student.studentProfile.class ? {
+								id: student.studentProfile.class.id,
+								name: student.studentProfile.class.name,
+								classGroup: {
+									id: student.studentProfile.class.classGroup.id,
+									name: student.studentProfile.class.classGroup.name,
+									program: {
+										id: student.studentProfile.class.classGroup.program.id,
+										name: student.studentProfile.class.classGroup.program.name,
+									},
+								},
+							} : null,
+							parent: student.studentProfile.parent ? {
+								user: {
+									name: student.studentProfile.parent.user.name || '',
+								},
+							} : null,
+						},
+					};
+				});
+			} catch (error) {
+				console.error("Error in searchStudents:", error);
+				if (error instanceof TRPCError) {
+					throw error;
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: 'An unexpected error occurred while searching students',
+					cause: error
+				});
+			}
 		}),
 
 	assignToClass: protectedProcedure
