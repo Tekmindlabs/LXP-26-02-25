@@ -12,6 +12,8 @@ import { StudentList } from "./StudentList";
 import { StudentForm } from "./StudentForm";
 import { StudentDetails } from "./StudentDetails";
 import { BulkStudentUpload } from "./BulkStudentUpload";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { ErrorDisplay } from "@/components/ui/error-display";
 
 interface SearchFilters {
 	search: string;
@@ -19,10 +21,6 @@ interface SearchFilters {
 	programId?: string;
 	status?: Status;
 }
-
-
-
-
 
 export const StudentManagement = () => {
 	const router = useRouter();
@@ -34,49 +32,43 @@ export const StudentManagement = () => {
 		search: "",
 	});
 
-	const { data: studentsData, isLoading, error } = api.student.searchStudents.useQuery(filters, {
+	const {
+		data: studentsData,
+		isLoading: isLoadingStudents,
+		error: studentsError,
+		refetch: refetchStudents
+	} = api.student.searchStudents.useQuery(filters, {
 		retry: 1,
 		refetchOnWindowFocus: false,
-		onError: (error) => {
-			console.error("Error fetching students:", error);
-		}
 	});
 
-	const { data: classes, isLoading: isLoadingClasses } = api.class.searchClasses.useQuery({}, {
+	const {
+		data: classes,
+		isLoading: isLoadingClasses
+	} = api.class.searchClasses.useQuery({}, {
 		retry: 1,
 		refetchOnWindowFocus: false
 	});
-	
-	const { data: programs, isLoading: isLoadingPrograms } = api.program.getAll.useQuery({
+
+	const {
+		data: programs,
+		isLoading: isLoadingPrograms
+	} = api.program.getAll.useQuery({
 		page: 1,
-		pageSize: 10
+		pageSize: 50
 	}, {
 		retry: 1,
 		refetchOnWindowFocus: false
 	});
 
-	if (isLoading || isLoadingClasses || isLoadingPrograms) {
-		return (
-			<div className="flex items-center justify-center min-h-[200px]">
-				<div className="text-center">
-					<div className="text-lg font-semibold">Loading...</div>
-					<div className="text-sm text-muted-foreground">Please wait while we fetch the data</div>
-				</div>
-			</div>
-		);
+	const isLoading = isLoadingStudents || isLoadingClasses || isLoadingPrograms;
+
+	if (isLoading) {
+		return <LoadingSpinner />;
 	}
 
-	if (error) {
-		return (
-			<div className="flex items-center justify-center min-h-[200px]">
-				<div className="text-center">
-					<div className="text-lg font-semibold text-destructive">Error</div>
-					<div className="text-sm text-muted-foreground">
-						{error.message || "Failed to load students. Please try again later."}
-					</div>
-				</div>
-			</div>
-		);
+	if (studentsError) {
+		return <ErrorDisplay error={studentsError} onRetry={refetchStudents} />;
 	}
 
 	const students = studentsData?.map(student => ({
@@ -108,18 +100,13 @@ export const StudentManagement = () => {
 		}
 	})) || [];
 
-	if (isLoading) {
-		return <div>Loading...</div>;
-	}
-
-
 	return (
 		<div className="space-y-4">
 			<Card>
 				<CardHeader className="flex flex-row items-center justify-between">
 					<CardTitle>Student Management</CardTitle>
 					<div className="flex items-center gap-4">
-						<BulkStudentUpload />
+						<BulkStudentUpload onSuccess={refetchStudents} />
 						<Button onClick={() => router.push(`/dashboard/${role}/student/create`)}>
 							Enroll Student
 						</Button>
@@ -187,7 +174,7 @@ export const StudentManagement = () => {
 
 					<div className="space-y-4">
 						{showDetails && selectedStudentId ? (
-							<StudentDetails 
+							<StudentDetails
 								studentId={selectedStudentId}
 								onBack={() => {
 									setShowDetails(false);
@@ -196,18 +183,23 @@ export const StudentManagement = () => {
 							/>
 						) : (
 							<>
-								<StudentList 
-									students={students} 
+								<StudentList
+									students={students}
 									onSelect={(id) => {
 										setSelectedStudentId(id);
 										setShowDetails(true);
 									}}
 								/>
-								<StudentForm 
-									selectedStudent={students.find(s => s.id === selectedStudentId)}
-									classes={classes || []}
-									onSuccess={() => setSelectedStudentId(null)}
-								/>
+								{selectedStudentId && (
+									<StudentForm
+										selectedStudent={students.find(s => s.id === selectedStudentId)}
+										classes={classes || []}
+										onSuccess={() => {
+											setSelectedStudentId(null);
+											refetchStudents();
+										}}
+									/>
+								)}
 							</>
 						)}
 					</div>
