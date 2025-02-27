@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { DashboardContent } from '@/components/dashboard/DashboardContent';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,10 +24,13 @@ interface CampusPageProps {
 }
 
 export default function CampusPage({ params }: CampusPageProps) {
+	// Access params directly but with type safety
+	const { id, role } = params;
+	
 	const router = useRouter();
-	const { data: metrics, isLoading } = api.campus.getMetrics.useQuery({ campusId: params.id });
+	const { data: metrics, isLoading } = api.campus.getMetrics.useQuery({ campusId: id });
 	const { data: campusDetails } = api.campus.getAll.useQuery();
-	const campus = campusDetails?.find(c => c.id === params.id);
+	const campus = campusDetails?.find(c => c.id === id);
 
 	const content = isLoading ? (
 		<div className="space-y-6">
@@ -46,7 +50,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 			</div>
 
 			<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/programs`)}>
+				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${role}/campus/${id}/programs`)}>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 						<CardTitle className="text-sm font-medium">Programs</CardTitle>
 						<GraduationCap className="h-4 w-4 text-muted-foreground" />
@@ -57,7 +61,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 					</CardContent>
 				</Card>
 
-				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/class-groups`)}>
+				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${role}/campus/${id}/class-groups`)}>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 						<CardTitle className="text-sm font-medium">Class Groups</CardTitle>
 						<School className="h-4 w-4 text-muted-foreground" />
@@ -68,7 +72,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 					</CardContent>
 				</Card>
 
-				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/classes`)}>
+				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${role}/campus/${id}/classes`)}>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 						<CardTitle className="text-sm font-medium">Classes</CardTitle>
 						<BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -79,7 +83,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 					</CardContent>
 				</Card>
 
-				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/teachers`)}>
+				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${role}/campus/${id}/teachers`)}>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 						<CardTitle className="text-sm font-medium">Teachers</CardTitle>
 						<Users className="h-4 w-4 text-muted-foreground" />
@@ -90,7 +94,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 					</CardContent>
 				</Card>
 
-				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/coordinators`)}>
+				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${role}/campus/${id}/coordinators`)}>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 						<CardTitle className="text-sm font-medium">Coordinators</CardTitle>
 						<UserCog className="h-4 w-4 text-muted-foreground" />
@@ -101,7 +105,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 					</CardContent>
 				</Card>
 
-				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/students`)}>
+				<Card className="cursor-pointer" onClick={() => router.push(`/dashboard/${role}/campus/${id}/students`)}>
 					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 						<CardTitle className="text-sm font-medium">Students</CardTitle>
 						<Building2 className="h-4 w-4 text-muted-foreground" />
@@ -116,7 +120,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 	);
 
 	return (
-		<DashboardContent role={params.role} campusId={params.id}>
+		<DashboardContent role={role} campusId={id}>
 			{content}
 		</DashboardContent>
 	);

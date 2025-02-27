@@ -184,7 +184,8 @@ export const ProgramForm = ({
         if (selectedProgram) {
             updateMutation.mutate({
                 id: selectedProgram.id,
-                ...submissionData
+                ...submissionData,
+                campusIds: submissionData.campusIds || []
             });
         } else {
             createMutation.mutate(submissionData);
@@ -277,7 +278,7 @@ const transformProgramToFormData = (program: any): ProgramFormData => {
         name: program.name,
         description: program.description,
         calendarId: program.calendarId || "",
-        campusId: program.campuses?.map((campus: any) => campus.id) || [],
+        campusId: Array.isArray(program.campuses) ? program.campuses.map((campus: any) => campus.id) : [],
         coordinatorId: program.coordinatorId || "",
         status: program.status,
         termSystem: {
@@ -320,32 +321,35 @@ const validateForm = (formData: ProgramFormData): boolean => {
 };
 
 const prepareSubmissionData = (formData: ProgramFormData) => {
-  return {
-      name: formData.name.trim(),
-      description: formData.description?.trim(),
-      calendarId: formData.calendarId,
-      coordinatorId: formData.coordinatorId === "NO_SELECTION" ? 
-          undefined : formData.coordinatorId,
-      campusIds: formData.campusId,
-      status: formData.status,
-      termSystem: transformTermSystem(formData.termSystem),
-      assessmentSystem: formData.assessmentSystem ? {
-          type: formData.assessmentSystem.type as AssessmentSystemType,
-          markingScheme: formData.assessmentSystem.type === 'MARKING_SCHEME' 
-              ? {
-                  maxMarks: formData.assessmentSystem.markingScheme?.maxMarks || 100,
-                  passingMarks: formData.assessmentSystem.markingScheme?.passingMarks || 40,
-                  gradingScale: formData.assessmentSystem.markingScheme?.gradingScale || []
-              }
-              : undefined,
-          rubric: formData.assessmentSystem.type === 'RUBRIC' 
-              ? formData.assessmentSystem.rubric 
-              : undefined,
-          cgpaConfig: formData.assessmentSystem.type === 'CGPA' 
-              ? formData.assessmentSystem.cgpaConfig 
-              : undefined
-      } : undefined
-  };
+    console.log("Form data campusId:", formData.campusId);
+    const result = {
+        name: formData.name.trim(),
+        description: formData.description?.trim(),
+        calendarId: formData.calendarId,
+        coordinatorId: formData.coordinatorId === "NO_SELECTION" ? 
+            undefined : formData.coordinatorId,
+        campusIds: Array.isArray(formData.campusId) ? formData.campusId : [],
+        status: formData.status,
+        termSystem: transformTermSystem(formData.termSystem),
+        assessmentSystem: formData.assessmentSystem ? {
+            type: formData.assessmentSystem.type as AssessmentSystemType,
+            markingScheme: formData.assessmentSystem.type === 'MARKING_SCHEME' 
+                ? {
+                    maxMarks: formData.assessmentSystem.markingScheme?.maxMarks || 100,
+                    passingMarks: formData.assessmentSystem.markingScheme?.passingMarks || 40,
+                    gradingScale: formData.assessmentSystem.markingScheme?.gradingScale || []
+                }
+                : undefined,
+            rubric: formData.assessmentSystem.type === 'RUBRIC' 
+                ? formData.assessmentSystem.rubric 
+                : undefined,
+            cgpaConfig: formData.assessmentSystem.type === 'CGPA' 
+                ? formData.assessmentSystem.cgpaConfig 
+                : undefined
+        } : undefined
+    };
+    console.log("Prepared submission data campusIds:", result.campusIds);
+    return result;
 };
 
 

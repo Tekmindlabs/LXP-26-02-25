@@ -53,7 +53,7 @@ interface ProgramSubject {
   }
 }
 
-export const campusRouter = createTRPCRouter({
+export const baseCampusRouter = createTRPCRouter({
   create: protectedProcedure
     .input(campusCreateInput)
     .mutation(async ({ ctx, input }) => {
@@ -218,7 +218,7 @@ export const campusRouter = createTRPCRouter({
     .input(z.object({ campusId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [studentCount, teacherCount, programCount, classGroupCount] = await Promise.all([
-        ctx.prisma.studentProfile.count({
+        ctx.prisma.student.count({
           where: {
             class: {
               campusId: input.campusId,
@@ -247,7 +247,7 @@ export const campusRouter = createTRPCRouter({
           where: {
             campusClassGroups: {
               some: {
-                id: input.campusId,
+                campusId: input.campusId,
               },
             },
           },
@@ -296,13 +296,11 @@ export const campusRouter = createTRPCRouter({
       search: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const where: Prisma.StudentProfileWhereInput = {
+      const where: Prisma.StudentWhereInput = {
         class: {
-          campus: {
-            id: input.campusId,
-          },
+          campusId: input.campusId,
         },
-        ...(input.status && { status: input.status }),
+        ...(input.status && { user: { status: input.status } }),
         ...(input.search && {
           OR: [
             { user: { name: { contains: input.search, mode: "insensitive" } } },
@@ -311,7 +309,7 @@ export const campusRouter = createTRPCRouter({
         }),
       };
 
-      return ctx.prisma.studentProfile.findMany({
+      return ctx.prisma.student.findMany({
         where,
         include: {
           user: true,
@@ -510,7 +508,8 @@ export const campusRouter = createTRPCRouter({
       name: z.string(),
       buildingId: z.string().optional(),
       roomId: z.string().optional(),
-      capacity: z.number()
+      capacity: z.number(),
+      code: z.string()
     }))
     .mutation(async ({ ctx, input }) => {
       // First check if class with this name already exists in the class group
@@ -548,6 +547,7 @@ export const campusRouter = createTRPCRouter({
         const newClass = await ctx.prisma.class.create({
           data: {
             name: input.name,
+            code: input.code,
             campusId: input.campusId,
             classGroupId: input.classGroupId,
             buildingId: input.buildingId,
@@ -821,53 +821,41 @@ export const campusRouter = createTRPCRouter({
     }),
 
   getInheritedClassGroups: protectedProcedure
-    .input(z.object({
-      campusId: z.string(),
-      status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
-      search: z.string().optional(),
-    }))
-    .query(async ({ ctx, input }) => {
-      const campus = await ctx.prisma.campus.findUnique({
-        where: { id: input.campusId },
-        include: {
-          programs: true
-        }
-      });
-
-      if (!campus) {
+    .input(z.object({ campusId: z.string() }))
+    .query(async ({ ctx, input }: { ctx: Context; input: { campusId: string } }) => {
+      if (!ctx.session?.user) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Campus not found',
+          code: 'UNAUTHORIZED',
+          message: 'Not authenticated',
         });
       }
 
-      const programIds = campus.programs.map(p => p.id);
-
-      return ctx.prisma.classGroup.findMany({
+      const hasPermission = await ctx.prisma.campusRole.findFirst({
         where: {
-          programId: { in: programIds },
-          ...(input.status && { status: input.status }),
-          ...(input.search && {
-            name: { contains: input.search, mode: Prisma.QueryMode.insensitive }
-          })
-        },
-        include: {
-          program: true,
-          classes: {
-            include: {
-              teachers: {
-                include: {
-                  teacher: {
-                    include: {
-                      user: true
-                    }
-                  }
-                }
+          userId: ctx.session.user.id,
+          campusId: input.campusId,
+          role: {
+            permissions: {
+              some: {
+                permissionId: CampusPermission.VIEW_CLASS_GROUPS
               }
             }
           }
         },
-        orderBy: { name: "asc" }
+      });
+
+      if (!hasPermission) {
+        throw new TRPCError({ code: 'FORBIDDEN' });
+      }
+
+      return ctx.prisma.classGroup.findMany({
+        where: {
+          campusClassGroups: {
+            some: {
+              campusId: input.campusId,
+            },
+          },
+        },
       });
     }),
 
@@ -981,7 +969,7 @@ export const campusRouter = createTRPCRouter({
       campusId: z.string(),
       classGroupId: z.string(),
       name: z.string(),
-      code: z.string().optional()
+      code: z.string()
     }))
     .mutation(async ({ ctx, input }) => {
       // Get class group
@@ -1003,22 +991,13 @@ export const campusRouter = createTRPCRouter({
       const newClass = await ctx.prisma.class.create({
         data: {
           name: input.name,
-          // We'll set the code in a separate update since it's not in the schema
+          code: input.code,
           campusId: input.campusId,
           classGroupId: input.classGroupId,
           status: "ACTIVE"
         }
       });
       
-      // Update with code if provided
-      if (input.code) {
-        await ctx.prisma.$executeRaw`
-          UPDATE "Class" 
-          SET "code" = ${input.code}
-          WHERE "id" = ${newClass.id}
-        `;
-      }
-
       // Get program subjects
       const subjects = await ctx.prisma.subject.findMany({
         where: {
@@ -1174,10 +1153,45 @@ export const campusViewRouter = createTRPCRouter({
         where: {
           campusClassGroups: {
             some: {
-              id: input.campusId,
+              campusId: input.campusId,
             },
           },
         },
       });
     }),
 });
+
+// Create a combined router with all procedures
+const combinedCampusRouter = createTRPCRouter({
+  // Campus router procedures
+  create: baseCampusRouter.create,
+  getAll: baseCampusRouter.getAll,
+  getUserPermissions: baseCampusRouter.getUserPermissions,
+  getMetrics: baseCampusRouter.getMetrics,
+  getPrograms: baseCampusRouter.getPrograms,
+  getStudents: baseCampusRouter.getStudents,
+  getTeachers: baseCampusRouter.getTeachers,
+  getBuildings: baseCampusRouter.getBuildings,
+  getRooms: baseCampusRouter.getRooms,
+  getClasses: baseCampusRouter.getClasses,
+  getClassGroups: baseCampusRouter.getClassGroups,
+  createClass: baseCampusRouter.createClass,
+  getById: baseCampusRouter.getById,
+  update: baseCampusRouter.update,
+  refreshClassGroups: baseCampusRouter.refreshClassGroups,
+  addProgram: baseCampusRouter.addProgram,
+  getInheritedClassGroups: baseCampusRouter.getInheritedClassGroups,
+  assignTeacherToCampus: baseCampusRouter.assignTeacherToCampus,
+  removeTeacherFromCampus: baseCampusRouter.removeTeacherFromCampus,
+  updateTeacherCampusStatus: baseCampusRouter.updateTeacherCampusStatus,
+  setPrimaryCampus: baseCampusRouter.setPrimaryCampus,
+  createClassFromTemplate: baseCampusRouter.createClassFromTemplate,
+  getTeacherCampuses: baseCampusRouter.getTeacherCampuses,
+  
+  // Campus view router procedures
+  getInheritedPrograms: campusViewRouter.getInheritedPrograms,
+  // getInheritedClassGroups is already in baseCampusRouter
+});
+
+// Export the combined router as the main campus router
+export { combinedCampusRouter as campusRouter };

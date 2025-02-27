@@ -102,7 +102,10 @@ const CampusForm: FC<CampusFormProps> = ({ isOpen, onClose, campusId }) => {
 		if (campusData) {
 			try {
 				const establishmentDate = campusData.establishmentDate instanceof Date 
-					? campusData.establishmentDate.toISOString().split('T')[0]
+					? (() => {
+						const date = campusData.establishmentDate as Date;
+						return !isNaN(date.getTime()) ? date.toISOString().split('T')[0] : "";
+					})()
 					: String(campusData.establishmentDate);
 
 				form.reset({

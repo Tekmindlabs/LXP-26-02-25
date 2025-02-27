@@ -11,13 +11,18 @@ import type { Program } from "@prisma/client";
 import { type ReactNode } from "react";
 
 interface DashboardContentProps {
-  role: string;
-  campusId: string;
+  role?: string;
+  campusId?: string;
   children?: ReactNode;
 }
 
 export const DashboardContent = ({ role, campusId, children }: DashboardContentProps) => {
   const { data: session } = useSession();
+  
+  // Add null checks for role
+  if (!role) {
+    return <div className="space-y-6">{children}</div>;
+  }
   
   // Convert the role to kebab-case for feature lookup
   const normalizedFeatureRole = role.toLowerCase().replace(/_/g, '-');
@@ -50,7 +55,7 @@ export const DashboardContent = ({ role, campusId, children }: DashboardContentP
     .join(' ');
 
   const { data: programs } = api.campus.getInheritedPrograms.useQuery(
-    { campusId },
+    { campusId: campusId || '' },
     { enabled: !!campusId }
   );
 

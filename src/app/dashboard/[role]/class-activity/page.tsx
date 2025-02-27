@@ -37,8 +37,10 @@ function formatDate(date: Date | null): string {
 
 export default function ClassActivityPage({ params }: Props) {
 	const router = useRouter();
+	// Destructure params directly to avoid the Next.js warning
+	const { role } = params;
+	
 	const { data: activities, isLoading } = api.classActivity.getAll.useQuery({}, {
-
 		select: (data) => data.map(activity => ({
 			id: activity.id,
 			title: activity.title,
@@ -88,7 +90,7 @@ export default function ClassActivityPage({ params }: Props) {
 			cell: ({ row }) => (
 				<Button
 					variant="outline"
-					onClick={() => router.push(`/dashboard/${params.role}/class-activity/${row.original.id}/edit`)}
+					onClick={() => router.push(`/dashboard/${role}/class-activity/${row.original.id}/edit`)}
 				>
 					Edit
 				</Button>
@@ -101,7 +103,7 @@ export default function ClassActivityPage({ params }: Props) {
 			<div className="flex justify-between items-center mb-6">
 				<h1 className="text-2xl font-bold">Class Activities</h1>
 				<Button 
-					onClick={() => router.push(`/dashboard/${params.role}/class-activity/create`)}
+					onClick={() => router.push(`/dashboard/${role}/class-activity/create`)}
 				>
 					Create Activity
 				</Button>

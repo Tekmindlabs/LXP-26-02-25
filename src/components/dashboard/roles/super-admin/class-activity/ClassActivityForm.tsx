@@ -609,7 +609,9 @@ const ClassActivityForm: React.FC<Props> = ({ activityId, onClose }) => {
 													<Input 
 														type="datetime-local" 
 														{...field}
-														value={field.value ? new Date(field.value).toISOString().slice(0, 16) : ''}
+														value={field.value && !isNaN(new Date(field.value).getTime()) 
+															? new Date(field.value).toISOString().slice(0, 16) 
+															: ''}
 														onChange={(e) => field.onChange(new Date(e.target.value))}
 													/>
 												</FormControl>
@@ -628,7 +630,9 @@ const ClassActivityForm: React.FC<Props> = ({ activityId, onClose }) => {
 													<Input 
 														type="datetime-local" 
 														{...field}
-														value={field.value ? new Date(field.value).toISOString().slice(0, 16) : ''}
+														value={field.value && !isNaN(new Date(field.value).getTime()) 
+															? new Date(field.value).toISOString().slice(0, 16) 
+															: ''}
 														onChange={(e) => field.onChange(new Date(e.target.value))}
 													/>
 												</FormControl>

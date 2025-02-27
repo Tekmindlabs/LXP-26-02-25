@@ -25,7 +25,8 @@ export default function ProgramsPage({
   params: { id: string; role: string };
 }) {
   const router = useRouter();
-  const { data: programs, isLoading } = api.campus.getPrograms.useQuery({ campusId: params.id });
+  const { id, role } = params;
+  const { data: programs, isLoading } = api.campus.getPrograms.useQuery({ campusId: id });
 
   const columns: ColumnDef<Program>[] = [
     {
@@ -56,14 +57,14 @@ export default function ProgramsPage({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/programs/${row.original.id}/edit`)}
+            onClick={() => router.push(`/dashboard/${role}/campus/${id}/programs/${row.original.id}/edit`)}
           >
             Edit
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/programs/${row.original.id}/class-groups`)}
+            onClick={() => router.push(`/dashboard/${role}/campus/${id}/programs/${row.original.id}/class-groups`)}
           >
             View Class Groups
           </Button>
@@ -73,11 +74,11 @@ export default function ProgramsPage({
   ];
 
   return (
-    <DashboardContent>
+    <DashboardContent role={role} campusId={id}>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-3xl font-bold tracking-tight">Programs</h2>
-          <Button onClick={() => router.push(`/dashboard/${params.role}/campus/${params.id}/programs/new`)}>
+          <Button onClick={() => router.push(`/dashboard/${role}/campus/${id}/programs/new`)}>
             <Plus className="mr-2 h-4 w-4" /> Add Program
           </Button>
         </div>

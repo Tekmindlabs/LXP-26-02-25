@@ -19,6 +19,7 @@ interface TermSystemSectionProps {
 			name: string;
 			startDate: Date;
 			endDate: Date;
+			type?: TermSystemType;
 		}>;
 	};
 	selectedProgram?: any;
@@ -78,7 +79,9 @@ export const TermSystemSection = ({
 								<Label>Start Date</Label>
 								<Input
 									type="date"
-									value={term.startDate.toISOString().split('T')[0]}
+									value={term.startDate && !isNaN(term.startDate.getTime()) 
+										? term.startDate.toISOString().split('T')[0] 
+										: ''}
 									onChange={(e) => onTermChange(index, 'startDate', new Date(e.target.value))}
 								/>
 							</div>
@@ -86,10 +89,17 @@ export const TermSystemSection = ({
 								<Label>End Date</Label>
 								<Input
 									type="date"
-									value={term.endDate.toISOString().split('T')[0]}
+									value={term.endDate && !isNaN(term.endDate.getTime()) 
+										? term.endDate.toISOString().split('T')[0] 
+										: ''}
 									onChange={(e) => onTermChange(index, 'endDate', new Date(e.target.value))}
 								/>
 							</div>
+							<input 
+								type="hidden" 
+								value={term.type || termSystem.type} 
+								onChange={(e) => onTermChange(index, 'type', e.target.value as TermSystemType)}
+							/>
 						</div>
 					</div>
 				))}

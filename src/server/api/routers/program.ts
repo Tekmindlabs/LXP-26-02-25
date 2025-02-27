@@ -603,6 +603,10 @@ if (input.campusIds) {
               calendar: input.calendarId ? { connect: { id: input.calendarId } } : undefined,
               coordinator: input.coordinatorId ? { connect: { id: input.coordinatorId } } : undefined,
               status: input.status,
+              campuses: input.campusIds && input.campusIds.length > 0 ? { 
+                set: [], // Clear existing connections
+                connect: input.campusIds.map(id => ({ id })) 
+              } : undefined,
               termSystem: input.termSystem?.type,
               termStructures: input.termSystem ? {
                 create: input.termSystem.terms.map((term, index) => ({

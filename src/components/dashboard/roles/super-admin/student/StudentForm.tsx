@@ -75,7 +75,10 @@ export const StudentForm = ({ selectedStudent, classes, campuses, onSuccess }: S
 			name: selectedStudent?.name || "",
 			email: selectedStudent?.email || "",
 			dateOfBirth: selectedStudent?.studentProfile.dateOfBirth 
-				? new Date(selectedStudent.studentProfile.dateOfBirth).toISOString().split('T')[0] 
+				? (() => {
+					const date = new Date(selectedStudent.studentProfile.dateOfBirth);
+					return !isNaN(date.getTime()) ? date.toISOString().split('T')[0] : "";
+				})()
 				: "",
 			classId: selectedStudent?.studentProfile.class?.id || "",
 			status: selectedStudent?.status || Status.ACTIVE,
@@ -248,7 +251,7 @@ export const StudentForm = ({ selectedStudent, classes, campuses, onSuccess }: S
 											options={campuses.map(campus => ({
 												label: campus.name,
 												value: campus.id,
-											})))}
+											}))}
 											onChange={field.onChange}
 											placeholder="Select campuses"
 										/>

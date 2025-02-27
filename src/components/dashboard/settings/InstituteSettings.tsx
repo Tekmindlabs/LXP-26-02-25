@@ -45,9 +45,6 @@ export function InstituteSettings() {
 		}
 	}, [instituteSettings, settings.id]);
 
-
-
-
 	const updateSettings = api.settings.updateInstituteSettings.useMutation({
 		onSuccess: () => {
 			toast({
@@ -167,7 +164,9 @@ export function InstituteSettings() {
 								<Input
 									id="academicYearStart"
 									type="date"
-									value={settings.academicYearStart.toISOString().split('T')[0]}
+									value={settings.academicYearStart && !isNaN(settings.academicYearStart.getTime()) 
+										? settings.academicYearStart.toISOString().split('T')[0] 
+										: ''}
 									onChange={(e) => setSettings({ ...settings, academicYearStart: new Date(e.target.value) })}
 									required
 								/>
@@ -177,7 +176,9 @@ export function InstituteSettings() {
 								<Input
 									id="academicYearEnd"
 									type="date"
-									value={settings.academicYearEnd.toISOString().split('T')[0]}
+									value={settings.academicYearEnd && !isNaN(settings.academicYearEnd.getTime()) 
+										? settings.academicYearEnd.toISOString().split('T')[0] 
+										: ''}
 									onChange={(e) => setSettings({ ...settings, academicYearEnd: new Date(e.target.value) })}
 									required
 								/>
