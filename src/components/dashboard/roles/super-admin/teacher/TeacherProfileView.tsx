@@ -45,7 +45,7 @@ export default function TeacherProfileView({ teacherId }: TeacherProfileViewProp
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
 	const [selectedPeriod, setSelectedPeriod] = useState<ExtendedPeriod | null>(null);
 
-	const { data: teacher, isLoading } = api.teacher.getById.useQuery(teacherId, {
+	const { data: teacher, isLoading, error: teacherError } = api.teacher.getById.useQuery(teacherId, {
 		select: (data) => ({
 			...data,
 			teacherProfile: {
@@ -54,22 +54,66 @@ export default function TeacherProfileView({ teacherId }: TeacherProfileViewProp
 					...c,
 					class: {
 						...c.class,
-						term: c.class.term
+						timetable: c.class.timetable
 					}
 				})) ?? []
 			}
-		})
+		}),
+		retry: 1,
+		refetchOnWindowFocus: false,
+		onError: (error) => {
+			console.error("Error fetching teacher:", error);
+		}
 	});
 
-	const { data: teacherCampuses = [], isLoading: isLoadingCampuses } = api.teacher.getTeacherCampuses.useQuery(
+	const { data: teacherCampuses = [], isLoading: isLoadingCampuses, error: campusError } = api.teacher.getTeacherCampuses.useQuery(
 		{ teacherId },
-		{ enabled: !!teacherId }
+		{ 
+			enabled: !!teacherId && !teacherError,
+			retry: 1,
+			refetchOnWindowFocus: false,
+			onError: (error) => {
+				console.error("Error fetching teacher campuses:", error);
+			}
+		}
 	);
 
 	const utils = api.useContext();
 
-	if (isLoading || isLoadingCampuses) return <div>Loading...</div>;
-	if (!teacher?.teacherProfile) return <div>Teacher not found</div>;
+	if (isLoading || isLoadingCampuses) {
+		return (
+			<div className="flex items-center justify-center min-h-[200px]">
+				<div className="text-center">
+					<div className="text-lg font-semibold">Loading...</div>
+					<div className="text-sm text-muted-foreground">Please wait while we fetch the teacher data</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (teacherError || campusError) {
+		return (
+			<div className="flex items-center justify-center min-h-[200px]">
+				<div className="text-center">
+					<div className="text-lg font-semibold text-destructive">Error</div>
+					<div className="text-sm text-muted-foreground">
+						{teacherError?.message || campusError?.message || "Failed to load teacher data. Please try again later."}
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (!teacher?.teacherProfile) {
+		return (
+			<div className="flex items-center justify-center min-h-[200px]">
+				<div className="text-center">
+					<div className="text-lg font-semibold">Not Found</div>
+					<div className="text-sm text-muted-foreground">Teacher profile not found</div>
+				</div>
+			</div>
+		);
+	}
 
 	const timetableId = teacher.teacherProfile.classes[0]?.class.timetable?.id;
 	const assignments = teacher.teacherProfile.classes.flatMap(teacherClass => 
@@ -178,11 +222,11 @@ export default function TeacherProfileView({ teacherId }: TeacherProfileViewProp
 					<div className="grid md:grid-cols-[1fr_300px] gap-6">
 						<Card>
 							<CardContent className="p-6">
-								{teacher.teacherProfile.classes[0]?.class.term && (
+								{teacher.teacherProfile.classes[0]?.class.timetable && (
 									<ScheduleView 
 										type="teacher"
 										entityId={teacherId}
-										termId={teacher.teacherProfile.classes[0].class.term.id}
+										termId={teacher.teacherProfile.classes[0].class.timetable.id}
 									/>
 								)}
 							</CardContent>

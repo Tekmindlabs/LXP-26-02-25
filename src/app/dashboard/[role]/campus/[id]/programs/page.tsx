@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { DashboardContent } from '@/components/dashboard/DashboardContent';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,27 +12,37 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Status } from '@prisma/client';
 
+// Update the Program interface to match the actual data structure
 interface Program {
   id: string;
-  name: string;
+  name: string | null;
   description: string | null;
   status: Status;
-  classGroupCount: number;
+  classGroupCount?: number;
+  termSystem?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  coordinatorId?: string | null;
+  calendarId?: string;
 }
 
 export default function ProgramsPage({
   params,
 }: {
-  params: { id: string; role: string };
+  params: Promise<{ id: string; role: string }>;
 }) {
   const router = useRouter();
-  const { id, role } = params;
+  // Unwrap params using React.use()
+  const unwrappedParams = React.use(params);
+  const { id, role } = unwrappedParams;
+  
   const { data: programs, isLoading } = api.campus.getPrograms.useQuery({ campusId: id });
 
   const columns: ColumnDef<Program>[] = [
     {
       accessorKey: 'name',
       header: 'Name',
+      cell: ({ row }) => row.original.name || 'Unnamed Program',
     },
     {
       accessorKey: 'description',
@@ -40,6 +51,7 @@ export default function ProgramsPage({
     {
       accessorKey: 'classGroupCount',
       header: 'Class Groups',
+      cell: ({ row }) => row.original.classGroupCount || 0,
     },
     {
       accessorKey: 'status',

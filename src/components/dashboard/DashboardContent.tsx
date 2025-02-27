@@ -44,7 +44,16 @@ export const DashboardContent = ({ role, campusId, children }: DashboardContentP
     if (typeof component.component === 'string') {
       return features.includes(component.component.toLowerCase() as DashboardFeature);
     }
-    return features.includes((component.component.name?.toLowerCase() ?? '') as DashboardFeature);
+    // For non-string components, try to get the name safely
+    let componentName = '';
+    try {
+      if (component.component && typeof component.component === 'object' && 'name' in component.component) {
+        componentName = (component.component.name as string).toLowerCase();
+      }
+    } catch (e) {
+      console.error('Error accessing component name:', e);
+    }
+    return features.includes(componentName as DashboardFeature);
   });
 
   // Convert role string to title case with spaces
@@ -53,13 +62,6 @@ export const DashboardContent = ({ role, campusId, children }: DashboardContentP
     .split(/[-_]/)
     .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
-
-  const { data: programs } = api.campus.getInheritedPrograms.useQuery(
-    { campusId: campusId || '' },
-    { enabled: !!campusId }
-  );
-
-  const programNames = programs?.map((program: Program) => program.title) ?? [];
 
   return (
     <div className="space-y-6">

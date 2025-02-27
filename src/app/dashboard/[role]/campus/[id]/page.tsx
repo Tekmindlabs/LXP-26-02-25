@@ -17,15 +17,16 @@ import {
 } from 'lucide-react';
 
 interface CampusPageProps {
-	params: {
+	params: Promise<{
 		id: string;
 		role: string;
-	};
+	}>;
 }
 
 export default function CampusPage({ params }: CampusPageProps) {
-	// Access params directly but with type safety
-	const { id, role } = params;
+	// Unwrap params using React.use()
+	const unwrappedParams = React.use(params);
+	const { id, role } = unwrappedParams;
 	
 	const router = useRouter();
 	const { data: metrics, isLoading } = api.campus.getMetrics.useQuery({ campusId: id });
@@ -78,7 +79,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 						<BookOpen className="h-4 w-4 text-muted-foreground" />
 					</CardHeader>
 					<CardContent>
-						<div className="text-2xl font-bold">{metrics.classCount}</div>
+						<div className="text-2xl font-bold">{metrics.classGroupCount}</div>
 						<p className="text-xs text-muted-foreground">Active classes</p>
 					</CardContent>
 				</Card>
@@ -100,7 +101,7 @@ export default function CampusPage({ params }: CampusPageProps) {
 						<UserCog className="h-4 w-4 text-muted-foreground" />
 					</CardHeader>
 					<CardContent>
-						<div className="text-2xl font-bold">{metrics.coordinatorCount}</div>
+						<div className="text-2xl font-bold">{metrics.teacherCount}</div>
 						<p className="text-xs text-muted-foreground">Active coordinators</p>
 					</CardContent>
 				</Card>

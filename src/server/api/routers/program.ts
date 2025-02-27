@@ -442,15 +442,17 @@ if (input.campusIds) {
           });
         }
 
-        if (!existingProgram?.calendar?.academicYear?.id || !existingProgram.calendar.terms[0]?.id) {
-          throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Program calendar must have an academic year and at least one term",
-          });
+        // Only validate academic year if calendar exists
+        let existingAcademicYearId: string | undefined;
+        if (existingProgram.calendar) {
+          if (!existingProgram.calendar.academicYear?.id) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Program calendar must have an academic year",
+            });
+          }
+          existingAcademicYearId = existingProgram.calendar.academicYear.id;
         }
-
-        const existingAcademicYearId = existingProgram.calendar.academicYear.id;
-        const existingTermId = existingProgram.calendar.terms[0].id;
 
         // Validate coordinator if provided
         if (input.coordinatorId) {
@@ -603,12 +605,12 @@ if (input.campusIds) {
               calendar: input.calendarId ? { connect: { id: input.calendarId } } : undefined,
               coordinator: input.coordinatorId ? { connect: { id: input.coordinatorId } } : undefined,
               status: input.status,
-              campuses: input.campusIds && input.campusIds.length > 0 ? { 
-                set: [], // Clear existing connections
-                connect: input.campusIds.map(id => ({ id })) 
-              } : undefined,
+              campuses: {
+                set: [],
+                connect: input.campusIds?.map(id => ({ id })) || []
+              },
               termSystem: input.termSystem?.type,
-              termStructures: input.termSystem ? {
+              termStructures: input.termSystem && existingAcademicYearId ? {
                 create: input.termSystem.terms.map((term, index) => ({
                   name: term.name,
                   startDate: term.startDate,

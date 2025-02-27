@@ -73,7 +73,7 @@ const transformTermSystem = (termSystem: ProgramFormData['termSystem']) => {
       type: termSystem.type,
       terms: termSystem.terms.map(term => ({
           name: term.name,
-          type: term.type,
+          type: term.type || termSystem.type,
           startDate: term.startDate,
           endDate: term.endDate,
           assessmentPeriods: term.assessmentPeriods
@@ -139,7 +139,7 @@ export const ProgramForm = ({
             name: `${type} ${formData.termSystem?.terms.length! + 1}`,
             startDate: new Date(),
             endDate: new Date(),
-            type,
+            type: type,
             assessmentPeriods: []
         };
 
@@ -167,6 +167,11 @@ export const ProgramForm = ({
             [field]: value
         };
 
+        // Ensure each term has a type property
+        if (field === 'type' || !updatedTerms[index].type) {
+            updatedTerms[index].type = updatedTerms[index].type || formData.termSystem!.type;
+        }
+
         handleFormDataChange({
             termSystem: {
                 ...formData.termSystem!,
@@ -179,7 +184,9 @@ export const ProgramForm = ({
         e.preventDefault();
         if (!validateForm(formData)) return;
 
+        console.log("Form data before submission:", formData);
         const submissionData = prepareSubmissionData(formData);
+        console.log("Submission data:", submissionData);
 
         if (selectedProgram) {
             updateMutation.mutate({
@@ -188,7 +195,10 @@ export const ProgramForm = ({
                 campusIds: submissionData.campusIds || []
             });
         } else {
-            createMutation.mutate(submissionData);
+            createMutation.mutate({
+                ...submissionData,
+                campusIds: submissionData.campusIds || []
+            });
         }
     };
 
@@ -257,6 +267,9 @@ export const ProgramForm = ({
 const transformProgramToFormData = (program: any): ProgramFormData => {
     if (!program) return defaultFormData;
     
+    console.log("Program data in transform:", program);
+    console.log("Program campuses:", program.campuses);
+    
     const assessmentSystem = program.assessmentSystem ? {
         type: program.assessmentSystem.type as AssessmentSystemType,
         markingScheme: program.assessmentSystem.type === 'MARKING_SCHEME' 
@@ -283,18 +296,21 @@ const transformProgramToFormData = (program: any): ProgramFormData => {
         status: program.status,
         termSystem: {
             type: program.termStructures?.[0]?.type || "SEMESTER",
-            terms: program.termStructures?.map((term: any) => ({
-                name: term.name,
-                startDate: new Date(term.startDate),
-                endDate: new Date(term.endDate),
-                type: term.type as TermSystemType,
-                assessmentPeriods: term.assessmentPeriods?.map((period: any) => ({
-                    name: period.name,
-                    startDate: new Date(period.startDate),
-                    endDate: new Date(period.endDate),
-                    weight: period.weight
-                })) || []
-            })) || []
+            terms: program.termStructures?.map((term: any) => {
+                const termType = term.type || program.termStructures?.[0]?.type || "SEMESTER";
+                return {
+                    name: term.name,
+                    startDate: new Date(term.startDate),
+                    endDate: new Date(term.endDate),
+                    type: termType as TermSystemType,
+                    assessmentPeriods: term.assessmentPeriods?.map((period: any) => ({
+                        name: period.name,
+                        startDate: new Date(period.startDate),
+                        endDate: new Date(period.endDate),
+                        weight: period.weight
+                    })) || []
+                };
+            }) || []
         },
         assessmentSystem
     };

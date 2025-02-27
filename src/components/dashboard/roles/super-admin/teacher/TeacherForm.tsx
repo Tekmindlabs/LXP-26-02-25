@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -81,6 +81,8 @@ export default function TeacherForm({
   onClose,
 }: TeacherFormProps) {
   const router = useRouter();
+  const params = useParams();
+  const role = params.role as string;
   const [loading, setLoading] = useState(false);
 
   // Get all campuses
@@ -104,6 +106,21 @@ export default function TeacherForm({
     { enabled: !!teacherId }
   );
 
+  const form = useForm<TeacherFormValues>({
+    resolver: zodResolver(teacherFormSchema),
+    defaultValues: {
+      name: initialData.name ?? "",
+      email: initialData.email ?? "",
+      phoneNumber: initialData.phoneNumber ?? "",
+      teacherType: initialData.teacherType ?? TeacherType.SUBJECT,
+      specialization: initialData.specialization ?? "",
+      subjectIds: initialData.subjectIds ?? [],
+      classIds: initialData.classIds ?? [],
+      campusIds: initialData.campusId ? [initialData.campusId] : [],
+      primaryCampusId: initialData.campusId ?? "",
+    },
+  });
+
   // Create teacher mutation
   const createTeacher = api.teacher.createTeacher.useMutation({
     onSuccess: (data) => {
@@ -123,7 +140,7 @@ export default function TeacherForm({
       
       toast.success("Teacher created successfully");
       setLoading(false);
-      router.push(`/dashboard/super-admin/campus/${initialData.campusId}/teachers`);
+      router.push(`/dashboard/${role}/teacher`);
       router.refresh();
     },
     onError: (error: ApiError) => {
@@ -172,7 +189,7 @@ export default function TeacherForm({
       
       toast.success("Teacher updated successfully");
       setLoading(false);
-      router.push(`/dashboard/super-admin/campus/${initialData.campusId}/teachers`);
+      router.push(`/dashboard/${role}/teacher`);
       router.refresh();
     },
     onError: (error: ApiError) => {
@@ -200,21 +217,6 @@ export default function TeacherForm({
     }
   });
 
-  const form = useForm<TeacherFormValues>({
-    resolver: zodResolver(teacherFormSchema),
-    defaultValues: {
-      name: initialData.name ?? "",
-      email: initialData.email ?? "",
-      phoneNumber: initialData.phoneNumber ?? "",
-      teacherType: initialData.teacherType ?? TeacherType.CLASS,
-      specialization: initialData.specialization ?? "",
-      subjectIds: initialData.subjectIds ?? [],
-      classIds: initialData.classIds ?? [],
-      campusIds: initialData.campusId ? [initialData.campusId] : [],
-      primaryCampusId: initialData.campusId ?? "",
-    },
-  });
-
   // Set form default values when teacher data is loaded
   useEffect(() => {
     if (teacherData && teacherCampuses) {
@@ -225,7 +227,7 @@ export default function TeacherForm({
         name: teacherData.name || "",
         email: teacherData.email || "",
         phoneNumber: teacherData.phoneNumber || "",
-        teacherType: teacherData.teacherProfile?.teacherType || TeacherType.CLASS,
+        teacherType: teacherData.teacherProfile?.teacherType || TeacherType.SUBJECT,
         specialization: teacherData.teacherProfile?.specialization || "",
         subjectIds: teacherData.teacherProfile?.subjects?.map((s: { id: string }) => s.id) ?? [],
         classIds: teacherData.teacherProfile?.classes?.map((c: { id: string }) => c.id) ?? [],
@@ -237,18 +239,16 @@ export default function TeacherForm({
 
   const onSubmit = async (data: TeacherFormValues) => {
     try {
+      setLoading(true);
       if (isCreate) {
         await createTeacher.mutateAsync(data);
-        toast.success("Teacher created successfully");
-        router.push(`/dashboard/super-admin/campus/${initialData.campusId}`);
       } else if (teacherId) {
-        await updateTeacher.mutateAsync({ ...data, teacherId });
-        toast.success("Teacher updated successfully");
-        if (onClose) onClose();
+        await updateTeacher.mutateAsync({ ...data, id: teacherId });
       }
     } catch (error) {
       const apiError = error as ApiError;
       toast.error(apiError.message || "Something went wrong");
+      setLoading(false);
     }
   };
 
@@ -314,7 +314,7 @@ export default function TeacherForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Teacher Type</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select teacher type" />
@@ -344,32 +344,30 @@ export default function TeacherForm({
             )}
           />
 
-          {form.watch("teacherType") === TeacherType.CLASS && (
-            <FormField
-              control={form.control}
-              name="subjectIds"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Assigned Subjects</FormLabel>
-                  <FormControl>
-                    <MultiSelect<string>
-                      value={field.value ?? []}
-                      options={
-                        campusSubjects?.map((subject: Subject) => ({
-                          label: subject.name,
-                          value: subject.id,
-                        })) ?? []
-                      }
-                      onChange={field.onChange}
-                      placeholder="Select subjects"
-                      disabled={isLoadingSubjects}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
+          <FormField
+            control={form.control}
+            name="subjectIds"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Assigned Subjects</FormLabel>
+                <FormControl>
+                  <MultiSelect<string>
+                    value={field.value ?? []}
+                    options={
+                      campusSubjects?.map((subject: Subject) => ({
+                        label: subject.name,
+                        value: subject.id,
+                      })) ?? []
+                    }
+                    onChange={field.onChange}
+                    placeholder="Select subjects"
+                    disabled={isLoadingSubjects}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           {form.watch("teacherType") === TeacherType.SUBJECT && (
             <FormField
@@ -444,42 +442,40 @@ export default function TeacherForm({
                 )}
               />
 
-              {form.watch("campusIds")?.length > 0 && (
-                <FormField
-                  control={form.control}
-                  name="primaryCampusId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Primary Campus</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value || ""}
-                        disabled={form.watch("campusIds")?.length === 0}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select primary campus" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {form.watch("campusIds")?.map((campusId) => {
-                            const campus = campuses.find((c: Campus) => c.id === campusId);
-                            return (
-                              <SelectItem key={campusId} value={campusId}>
-                                {campus?.name || campusId}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                      <FormDescription>
-                        The primary campus is where the teacher is primarily based
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+              <FormField
+                control={form.control}
+                name="primaryCampusId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Primary Campus</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value || ""}
+                      disabled={form.watch("campusIds")?.length === 0}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select primary campus" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {form.watch("campusIds")?.map((campusId) => {
+                          const campus = campuses.find((c: Campus) => c.id === campusId);
+                          return (
+                            <SelectItem key={campusId} value={campusId}>
+                              {campus?.name || campusId}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      The primary campus is where the teacher is primarily based
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
           </CardContent>
         </Card>

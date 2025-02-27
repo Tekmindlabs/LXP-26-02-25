@@ -100,6 +100,13 @@ export const TermSystemSection = ({
 								value={term.type || termSystem.type} 
 								onChange={(e) => onTermChange(index, 'type', e.target.value as TermSystemType)}
 							/>
+							{!term.type && (
+								<input 
+									type="hidden" 
+									value={termSystem.type}
+									onChange={() => onTermChange(index, 'type', termSystem.type)}
+								/>
+							)}
 						</div>
 					</div>
 				))}

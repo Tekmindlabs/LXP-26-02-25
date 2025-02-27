@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import { generatePassword } from "../../../utils/password";
 import { CampusTeacherService } from "../../services/CampusTeacherService";
 import { CampusUserService } from "../../services/CampusUserService";
+import { TRPCError } from "@trpc/server";
 
 interface WeeklyHours {
 	dayName: string;
@@ -52,19 +53,25 @@ export const teacherRouter = createTRPCRouter({
 		.input(z.object({
 			name: z.string(),
 			email: z.string().email(),
-			phoneNumber: z.string().optional(),
+			phoneNumber: z.string(),
+			teacherType: z.nativeEnum(TeacherType),
 			specialization: z.string().optional(),
-			subjects: z.array(z.string()).optional(),
-			teacherType: z.nativeEnum(TeacherType).optional(),
+			subjectIds: z.array(z.string()).optional(),
+			classIds: z.array(z.string()).optional(),
+			campusIds: z.array(z.string()).optional(),
+			primaryCampusId: z.string().optional(),
 		}))
 		.mutation(async ({ ctx, input }) => {
 			const {
 				name,
 				email,
 				phoneNumber,
-				specialization,
-				subjects,
 				teacherType,
+				specialization,
+				subjectIds,
+				classIds,
+				campusIds,
+				primaryCampusId,
 			} = input;
 
 			const existingTeacher = await ctx.prisma.user.findFirst({
@@ -88,14 +95,36 @@ export const teacherRouter = createTRPCRouter({
 					teacherProfile: {
 						create: {
 							specialization,
-							teacherType: teacherType || TeacherType.SUBJECT,
-							...(subjects && {
+							teacherType,
+							...(subjectIds && subjectIds.length > 0 && {
 								subjects: {
-									create: subjects.map((subjectId) => ({
+									create: subjectIds.map((subjectId) => ({
 										subject: {
 											connect: { id: subjectId },
 										},
 										status: Status.ACTIVE,
+									})),
+								},
+							}),
+							...(classIds && classIds.length > 0 && {
+								classes: {
+									create: classIds.map((classId) => ({
+										class: {
+											connect: { id: classId },
+										},
+										status: Status.ACTIVE,
+										isClassTeacher: teacherType === TeacherType.CLASS,
+									})),
+								},
+							}),
+							...(campusIds && campusIds.length > 0 && {
+								campuses: {
+									create: campusIds.map((campusId) => ({
+										campus: {
+											connect: { id: campusId },
+										},
+										status: Status.ACTIVE,
+										isPrimary: campusId === primaryCampusId,
 									})),
 								},
 							}),
@@ -108,6 +137,26 @@ export const teacherRouter = createTRPCRouter({
 							subjects: {
 								include: {
 									subject: true
+								}
+							},
+							classes: {
+								include: {
+									class: {
+										include: {
+											classGroup: true,
+											students: true,
+											teachers: {
+												include: {
+													teacher: true
+												}
+											}
+										}
+									}
+								}
+							},
+							campuses: {
+								include: {
+									campus: true
 								}
 							}
 						}
@@ -237,57 +286,85 @@ export const teacherRouter = createTRPCRouter({
 		}),
 
 	getById: protectedProcedure
-		.input(z.string())
+		.input(z.string().min(1, "Teacher ID is required"))
 		.query(async ({ ctx, input }) => {
-			const teacher = await ctx.prisma.user.findFirst({
-				where: { 
-					id: input,
-					userType: UserType.TEACHER 
-				},
-				include: {
-					teacherProfile: {
-						include: {
-							subjects: {
-								include: {
-									subject: true
-								}
-							},
-							classes: {
-								include: {
-									class: {
-										include: {
-											classGroup: true,
-											timetables: {
-												include: {
-													periods: {
-														include: {
-															subject: true,
-															classroom: true,
-															teacher: true
+			try {
+				if (!input) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: 'Teacher ID is required',
+					});
+				}
+
+				const teacher = await ctx.prisma.user.findFirst({
+					where: { 
+						id: input,
+						userType: UserType.TEACHER 
+					},
+					include: {
+						teacherProfile: {
+							include: {
+								subjects: {
+									include: {
+										subject: true
+									}
+								},
+								classes: {
+									include: {
+										class: {
+											include: {
+												classGroup: true,
+												timetable: {
+													include: {
+														periods: {
+															include: {
+																subject: true,
+																classroom: true,
+																teacher: true
+															}
 														}
 													}
-												}
-											},
-											students: true,
-											teachers: {
-												include: {
-													teacher: true
+												},
+												activities: true,
+												students: true,
+												teachers: {
+													include: {
+														teacher: true
+													}
 												}
 											}
-										},
+										}
+									}
+								},
+								campuses: {
+									include: {
+										campus: true
 									}
 								}
 							}
 						}
 					}
+				});
+
+				if (!teacher) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'Teacher not found',
+					});
 				}
-			});
 
-			if (!teacher) {
-				throw new Error("Teacher not found");
+				return teacher;
+			} catch (error) {
+				console.error("Error in getById:", error);
+				if (error instanceof TRPCError) {
+					throw error;
+				}
+				throw new TRPCError({
+					code: 'INTERNAL_SERVER_ERROR',
+					message: 'An unexpected error occurred',
+					cause: error
+				});
 			}
-
-			return teacher;
 		}),
 
 	getTeacher: protectedProcedure
@@ -788,15 +865,29 @@ export const teacherRouter = createTRPCRouter({
 			includeInactive: z.boolean().optional()
 		}))
 		.query(async ({ ctx, input }) => {
-			const campusTeacherService = new CampusTeacherService(
-				ctx.prisma,
-				new CampusUserService(ctx.prisma)
-			);
-			
-			return campusTeacherService.getCampusesForTeacher(
-				ctx.session.user.id,
-				input.teacherId,
-				input.includeInactive
-			);
+			try {
+				const teacherProfile = await ctx.prisma.teacherProfile.findFirst({
+					where: { userId: input.teacherId },
+				});
+
+				if (!teacherProfile) {
+					throw new Error("Teacher profile not found");
+				}
+
+				const campuses = await ctx.prisma.teacherCampus.findMany({
+					where: {
+						teacherId: teacherProfile.id,
+						...(input.includeInactive ? {} : { status: Status.ACTIVE }),
+					},
+					include: {
+						campus: true,
+					},
+				});
+
+				return campuses;
+			} catch (error) {
+				console.error("Error in getTeacherCampuses:", error);
+				throw error;
+			}
 		}),
 });
